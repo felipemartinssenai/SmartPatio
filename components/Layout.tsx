@@ -1,0 +1,70 @@
+
+import React, { useState } from 'react';
+import Sidebar from './Sidebar';
+import { Profile } from '../types';
+import { Page } from '../App';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  profile: Profile;
+  signOut: () => void;
+  currentPage: Page;
+  setCurrentPage: (page: Page) => void;
+}
+
+const PAGE_TITLES: Record<Page, string> = {
+  dashboard: 'Dashboard Operacional',
+  collections: 'Minhas Coletas',
+  checkin: 'Check-in de Veículos',
+  financials: 'Controle Financeiro',
+  solicitacao_coleta: 'Solicitar Nova Coleta',
+  patio: 'Gerenciamento do Pátio',
+  fechamentos: 'Relatório de Fechamentos',
+};
+
+
+const Layout: React.FC<LayoutProps> = ({ children, profile, signOut, currentPage, setCurrentPage }) => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  const handleNavigate = (page: Page) => {
+    setCurrentPage(page);
+    setIsSidebarOpen(false); // Close sidebar on mobile after navigation
+  };
+
+  return (
+    <div className="h-screen w-screen bg-gray-900 text-gray-100 flex overflow-hidden">
+      {/* Sidebar */}
+      <Sidebar
+        profile={profile}
+        signOut={signOut}
+        currentPage={currentPage}
+        onNavigate={handleNavigate}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+      />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-gray-800 shadow-md flex items-center justify-between p-4 z-30 lg:hidden">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="text-white focus:outline-none"
+            aria-label="Abrir menu"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+          </button>
+          <h1 className="text-xl font-bold text-white">{PAGE_TITLES[currentPage]}</h1>
+          <div className="w-6"></div> {/* Spacer */}
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default Layout;

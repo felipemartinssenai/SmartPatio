@@ -1,0 +1,7 @@
+{
+  "name": "PátioLog - Gestão de Pátio e Guinchos",
+  "description": "Um sistema completo para gestão de pátio e logística de coleta de veículos, com rastreamento em tempo real, controle financeiro e perfis de usuário.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

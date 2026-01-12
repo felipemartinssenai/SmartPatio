@@ -24,10 +24,18 @@ const initialFormState = {
   proprietarioNumero: '',
 };
 
+const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
+    <div>
+        <label htmlFor={props.id} className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
+        <input
+          {...props}
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+    </div>
+);
+
 const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage }) => {
   const [formData, setFormData] = useState(initialFormState);
-
-  // Estado da UI
   const [loading, setLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +48,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
 
   const handleCepBlur = useCallback(async () => {
     const cep = formData.proprietarioCep.replace(/\D/g, '');
-    if (cep.length !== 8) {
-        return;
-    }
+    if (cep.length !== 8) return;
     setCepLoading(true);
     setError(null);
     try {
@@ -59,7 +65,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
             }));
         }
     } catch (e) {
-        setError('Falha ao buscar CEP. Verifique a conexão.');
+        setError('Falha ao buscar CEP.');
     } finally {
         setCepLoading(false);
     }
@@ -71,64 +77,62 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.placa) {
+        setError('A placa é obrigatória.');
+        return;
+    }
+    
     setLoading(true);
     setError(null);
     setSuccess(null);
 
-    const { error } = await supabase.rpc('create_new_vehicle_collection', {
-      p_placa: formData.placa,
-      p_modelo: formData.modelo,
-      p_cor: formData.cor,
-      p_ano: formData.ano ? parseInt(formData.ano) : null,
-      p_chassi: formData.chassi,
-      p_renavam: formData.renavam,
-      p_observacoes: formData.observacoes,
-      p_proprietario_nome: formData.proprietarioNome,
-      p_proprietario_telefone: formData.proprietarioTelefone,
-      p_proprietario_cpf: formData.proprietarioCpf,
-      p_proprietario_cep: formData.proprietarioCep,
-      p_proprietario_rua: formData.proprietarioRua,
-      p_proprietario_bairro: formData.proprietarioBairro,
-      p_proprietario_numero: formData.proprietarioNumero,
-    });
+    // ORDEM ALFABÉTICA RÍGIDA PARA EVITAR ERROS DE CACHE DO SUPABASE
+    const rpcPayload = {
+      p_ano: formData.ano ? parseInt(formData.ano, 10) : null,
+      p_chassi: formData.chassi || null,
+      p_cor: formData.cor || null,
+      p_modelo: formData.modelo || null,
+      p_observacoes: formData.observacoes || null,
+      p_placa: formData.placa.toUpperCase().trim(),
+      p_proprietario_bairro: formData.proprietarioBairro || null,
+      p_proprietario_cep: formData.proprietarioCep || null,
+      p_proprietario_cpf: formData.proprietarioCpf || null,
+      p_proprietario_nome: formData.proprietarioNome || null,
+      p_proprietario_numero: formData.proprietarioNumero || null,
+      p_proprietario_rua: formData.proprietarioRua || null,
+      p_proprietario_telefone: formData.proprietarioTelefone || null,
+      p_renavam: formData.renavam || null,
+    };
 
-    if (error) {
-      if (error.code === '23505') {
-        setError(`A placa ${formData.placa.toUpperCase()} já está registrada no sistema.`);
+    const { error: rpcError } = await supabase.rpc('create_new_vehicle_collection', rpcPayload);
+
+    if (rpcError) {
+      console.error('Erro RPC:', rpcError);
+      if (rpcError.code === '23505') {
+        setError(`A placa ${formData.placa.toUpperCase()} já existe no sistema.`);
       } else {
-        setError(`Erro ao criar solicitação: ${error.message}`);
+        setError(`Erro: ${rpcError.message}. Tente atualizar o script SQL do banco.`);
       }
     } else {
-      setSuccess(`Coleta para o veículo ${formData.placa.toUpperCase()} solicitada com sucesso!`);
+      setSuccess(`Coleta solicitada com sucesso!`);
       resetForm();
       setTimeout(() => {
         setSuccess(null);
         setCurrentPage('patio');
-      }, 2000);
+      }, 1500);
     }
 
     setLoading(false);
   }, [formData, resetForm, setCurrentPage]);
-  
-  const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
-    <div>
-        <label htmlFor={props.id} className="block text-sm font-medium text-gray-300 mb-2">{label}</label>
-        <input
-          {...props}
-          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-    </div>
-  );
 
   return (
     <div className="p-4 sm:p-8 h-full">
       <h1 className="text-3xl font-bold text-white mb-6">Solicitar Nova Coleta</h1>
       <div className="max-w-3xl mx-auto bg-gray-800 p-6 sm:p-8 rounded-lg shadow-lg">
         <form onSubmit={handleSubmit} className="space-y-8">
-          {error && <div className="bg-red-500/20 text-red-300 p-3 rounded-md text-center">{error}</div>}
-          {success && <div className="bg-green-500/20 text-green-300 p-3 rounded-md text-center">{success}</div>}
+          {error && <div className="bg-red-500/20 text-red-300 p-3 rounded-md text-center border border-red-500/50">{error}</div>}
+          {success && <div className="bg-green-500/20 text-green-300 p-3 rounded-md text-center border border-green-500/50">{success}</div>}
 
-          {/* Dados do Veículo */}
           <fieldset className="border border-gray-700 p-4 rounded-lg">
             <legend className="px-2 text-lg font-semibold text-white">Dados do Veículo</legend>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
@@ -140,12 +144,11 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
               <InputField label="Renavam" id="renavam" name="renavam" type="text" value={formData.renavam} onChange={handleChange} />
             </div>
             <div className="mt-6">
-                <label htmlFor="observacoes" className="block text-sm font-medium text-gray-300 mb-2">Observações (Infrações, Multas, etc.)</label>
+                <label htmlFor="observacoes" className="block text-sm font-medium text-gray-300 mb-2">Observações</label>
                 <textarea id="observacoes" name="observacoes" value={formData.observacoes} onChange={handleChange} rows={3} className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
             </div>
           </fieldset>
           
-          {/* Dados do Proprietário */}
           <fieldset className="border border-gray-700 p-4 rounded-lg">
             <legend className="px-2 text-lg font-semibold text-white">Dados do Proprietário</legend>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
@@ -165,9 +168,9 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed"
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-semibold transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed shadow-lg"
           >
-            {loading ? 'Enviando...' : 'Criar Solicitação de Coleta'}
+            {loading ? 'Processando...' : 'Criar Solicitação de Coleta'}
           </button>
         </form>
       </div>

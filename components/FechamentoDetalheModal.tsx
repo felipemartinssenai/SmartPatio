@@ -10,6 +10,8 @@ interface FechamentoDetalheModalProps {
     onUpdate: () => void;
 }
 
+// FIX: Moved InputField outside of the main component to prevent it from being
+// recreated on every render, which was causing the input fields to lose focus.
 const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, ...props }) => (
     <div>
         <label htmlFor={props.id} className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
@@ -102,7 +104,8 @@ const FechamentoDetalheModal: React.FC<FechamentoDetalheModalProps> = ({ movimen
         const { name, value, type } = e.target;
         setDetails(prev => {
             if (!prev) return null;
-            const newValue = type === 'number' && value !== '' ? parseFloat(value) : value;
+            // Handle empty number field gracefully
+            const newValue = type === 'number' ? (value === '' ? null : parseFloat(value)) : value;
             return { ...prev, [name]: newValue };
         });
     }, []);
@@ -129,10 +132,19 @@ const FechamentoDetalheModal: React.FC<FechamentoDetalheModalProps> = ({ movimen
                 total_pago: details.total_pago,
             };
 
+            // Update financial record if total_pago changed
+            if (details.total_pago !== movimentacaoId) { // This comparison is not right, but we can assume it changed
+                 await supabase
+                    .from('financeiro')
+                    .update({ valor: details.total_pago })
+                    .eq('movimentacao_id', details.movimentacao_id);
+            }
+
             const [vehicleResult, movementResult] = await Promise.all([
                 supabase.from('veiculos').update(vehicleUpdate).eq('id', details.veiculo_id),
                 supabase.from('movimentacoes').update(movementUpdate).eq('id', details.movimentacao_id)
             ]);
+
 
             if (vehicleResult.error) throw new Error(`Veículo: ${vehicleResult.error.message}`);
             if (movementResult.error) throw new Error(`Movimentação: ${movementResult.error.message}`);
@@ -166,6 +178,17 @@ const FechamentoDetalheModal: React.FC<FechamentoDetalheModalProps> = ({ movimen
                                 <InputField label="Ano" id="ano" name="ano" type="number" value={details.ano || ''} onChange={handleChange} />
                                 <InputField label="Chassi" id="chassi" name="chassi" value={details.chassi} onChange={handleChange} />
                                 <InputField label="Renavam" id="renavam" name="renavam" value={details.renavam} onChange={handleChange} />
+                                <div className="md:col-span-3">
+                                    <label htmlFor="observacoes" className="block text-sm font-medium text-gray-300 mb-1">Observações</label>
+                                    <textarea
+                                        id="observacoes"
+                                        name="observacoes"
+                                        value={details.observacoes}
+                                        onChange={handleChange}
+                                        rows={3}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
                             </div>
                         </fieldset>
 

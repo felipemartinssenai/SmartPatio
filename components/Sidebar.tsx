@@ -13,7 +13,6 @@ interface SidebarProps {
 }
 
 const NavLink: React.FC<{
-  // FIX: Replaced JSX.Element with React.ReactElement to resolve namespace issue.
   icon: React.ReactElement;
   label: string;
   page: Page;
@@ -39,7 +38,6 @@ const NavLink: React.FC<{
 interface MenuItem {
   page: Page;
   label: string;
-  // FIX: Replaced JSX.Element with React.ReactElement to resolve namespace issue.
   icon: React.ReactElement;
 }
 
@@ -59,14 +57,14 @@ const Sidebar: React.FC<SidebarProps> = ({ profile, signOut, currentPage, onNavi
       ];
 
   const sidebarContent = (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-gray-800">
         {/* Profile Section */}
         <div className="p-4 border-b border-gray-700">
             <div className="flex items-center">
-                <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center font-bold text-xl mr-3">
+                <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center font-bold text-xl mr-3 flex-shrink-0">
                     {profile.full_name?.charAt(0).toUpperCase()}
                 </div>
-                <div>
+                <div className="min-w-0">
                     <h2 className="font-semibold text-white truncate">{profile.full_name}</h2>
                     <p className="text-sm text-gray-400 capitalize">{profile.cargo}</p>
                 </div>
@@ -74,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ profile, signOut, currentPage, onNavi
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {menuItems.map(item => (
                 <NavLink 
                     key={item.page}
@@ -100,21 +98,32 @@ const Sidebar: React.FC<SidebarProps> = ({ profile, signOut, currentPage, onNavi
 
   return (
     <>
-      {/* Mobile Sidebar */}
-      <div className={`fixed inset-0 z-40 lg:hidden transition-transform transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="relative w-64 h-full bg-gray-800 shadow-lg">
-             {sidebarContent}
-             <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white lg:hidden">
-                <CloseIcon />
-            </button>
+      {/* Mobile Sidebar Container */}
+      <div className={`fixed inset-0 z-[3000] lg:hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          {/* Overlay - Fundo escuro fixo */}
+          <div 
+            onClick={onClose} 
+            className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+          ></div>
+          
+          {/* Sliding Panel */}
+          <div className={`absolute top-0 left-0 w-72 h-full transition-transform duration-300 transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+             <div className="relative h-full shadow-2xl">
+                {sidebarContent}
+                <button 
+                  onClick={onClose} 
+                  className="absolute top-4 -right-12 text-white bg-gray-800 p-2 rounded-r-md lg:hidden shadow-md"
+                  aria-label="Fechar menu"
+                >
+                    <CloseIcon />
+                </button>
+             </div>
           </div>
-          {/* Overlay */}
-          <div onClick={onClose} className="fixed inset-0 bg-black/60 z-30 lg:hidden"></div>
       </div>
 
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:flex lg:flex-shrink-0">
-          <div className="w-64 bg-gray-800">
+      {/* Desktop Sidebar (Fixed) */}
+      <div className="hidden lg:flex lg:flex-shrink-0 z-20">
+          <div className="w-64 bg-gray-800 border-r border-gray-700">
               {sidebarContent}
           </div>
       </div>
@@ -131,6 +140,5 @@ const ReportIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentCol
 const TowTruckIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v1m-6 8l-4-4m0 0l4-4m-4 4h12"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 15a2 2 0 11-4 0 2 2 0 014 0zM7 15a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>;
 const LogoutIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>;
 const CloseIcon = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>;
-
 
 export default Sidebar;

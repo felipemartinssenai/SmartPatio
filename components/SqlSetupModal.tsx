@@ -16,7 +16,9 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 -- Remove as funções usando CASCADE para remover objetos dependentes (como RLS policies)
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
 DROP FUNCTION IF EXISTS public.get_my_role() CASCADE;
-DROP FUNCTION IF EXISTS public.create_new_vehicle_collection(text, text, text, text, text, integer, text, text, text, text, text, text, text, text) CASCADE;
+
+-- Limpeza profunda da função para evitar conflitos de cache de schema
+DROP FUNCTION IF EXISTS public.create_new_vehicle_collection CASCADE;
 
 
 -- Remove as tabelas. O 'CASCADE' remove objetos dependentes (como policies).
@@ -169,47 +171,64 @@ CREATE POLICY "Admins e operadores podem gerenciar o financeiro" ON public.finan
 
 -- 5. FUNÇÕES CUSTOMIZADAS (RPC)
 
--- Função para criar uma nova solicitação de coleta.
--- Isso ajuda a encapsular a lógica de inserção e a contornar problemas de cache do lado do cliente.
-CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(
-    p_placa text,
-    p_modelo text,
-    p_cor text,
-    p_proprietario_nome text,
-    p_proprietario_telefone text,
-    p_ano int,
-    p_chassi text,
-    p_renavam text,
-    p_observacoes text,
-    p_proprietario_cpf text,
-    p_proprietario_cep text,
-    p_proprietario_rua text,
-    p_proprietario_bairro text,
-    p_proprietario_numero text
-)
+-- Função de envelope JSONB para evitar erros de cache de assinatura do PostgREST.
+CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(p_data jsonb)
 RETURNS void
 LANGUAGE plpgsql
-SECURITY DEFINER -- Executa com os privilégios do criador da função (owner)
+SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  v_placa text;
 BEGIN
-  -- A RLS para admins/operadores já permite a inserção, mas a função RPC
-  -- garante que a lógica de negócio esteja centralizada e segura.
+  v_placa := upper(trim(p_data->>'placa'));
+  
+  IF v_placa IS NULL OR v_placa = '' THEN
+    RAISE EXCEPTION 'A placa do veículo é obrigatória.';
+  END IF;
+
   INSERT INTO public.veiculos (
-      placa, modelo, cor, proprietario_nome, proprietario_telefone, status,
-      ano, chassi, renavam, observacoes, proprietario_cpf, proprietario_cep,
-      proprietario_rua, proprietario_bairro, proprietario_numero
+      placa, 
+      modelo, 
+      cor, 
+      ano,
+      chassi, 
+      renavam, 
+      observacoes,
+      proprietario_nome, 
+      proprietario_telefone, 
+      proprietario_cpf, 
+      proprietario_cep,
+      proprietario_rua, 
+      proprietario_bairro, 
+      proprietario_numero,
+      status
   )
   VALUES (
-      upper(p_placa), p_modelo, p_cor, p_proprietario_nome, p_proprietario_telefone, 'aguardando_coleta',
-      p_ano, p_chassi, p_renavam, p_observacoes, p_proprietario_cpf, p_proprietario_cep,
-      p_proprietario_rua, p_proprietario_bairro, p_proprietario_numero
+      v_placa,
+      p_data->>'modelo',
+      p_data->>'cor',
+      (p_data->>'ano')::int,
+      p_data->>'chassi',
+      p_data->>'renavam',
+      p_data->>'observacoes',
+      p_data->>'proprietario_nome',
+      p_data->>'proprietario_telefone',
+      p_data->>'proprietario_cpf',
+      p_data->>'proprietario_cep',
+      p_data->>'proprietario_rua',
+      p_data->>'proprietario_bairro',
+      p_data->>'proprietario_numero',
+      'aguardando_coleta'
   );
 END;
 $$;
 
--- Conceder permissão para que usuários autenticados possam chamar esta função
-GRANT EXECUTE ON FUNCTION public.create_new_vehicle_collection(text, text, text, text, text, integer, text, text, text, text, text, text, text, text) TO authenticated;
+-- Conceder permissões
+GRANT EXECUTE ON FUNCTION public.create_new_vehicle_collection TO authenticated;
+
+-- Força o reload do cache do PostgREST
+NOTIFY pgrst, 'reload schema';
 `;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
@@ -239,7 +258,7 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
           <button onClick={onClose} className="text-gray-400 hover:text-white">&times;</button>
         </div>
         <p className="text-sm text-gray-400 mb-4">
-          Copie e execute no <strong>SQL Editor</strong> do Supabase. <strong>Atenção:</strong> ele apagará todos os dados existentes para criar uma estrutura limpa.
+          Copie e execute no <strong>SQL Editor</strong> do Supabase. <strong>Atenção:</strong> este script agora usa o padrão JSONB para evitar erros de cache de função.
         </p>
         <pre className="bg-gray-900 text-gray-300 p-4 rounded-md overflow-auto flex-1 text-xs font-mono">
           <code>{SQL_SCRIPT}</code>

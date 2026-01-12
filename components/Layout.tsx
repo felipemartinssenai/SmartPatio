@@ -44,22 +44,22 @@ const Layout: React.FC<LayoutProps> = ({ children, profile, signOut, currentPage
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-gray-800 shadow-md flex items-center justify-between p-4 z-30 lg:hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header - z-index adjust to be above map search but below sidebar overlay */}
+        <header className="bg-gray-800 shadow-md flex items-center justify-between p-4 z-[1001] lg:hidden">
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="text-white focus:outline-none"
+            className="text-white p-1 -ml-1 focus:outline-none hover:bg-gray-700 rounded-md transition-colors"
             aria-label="Abrir menu"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           </button>
-          <h1 className="text-xl font-bold text-white">{PAGE_TITLES[currentPage]}</h1>
-          <div className="w-6"></div> {/* Spacer */}
+          <h1 className="text-xl font-bold text-white truncate px-2">{PAGE_TITLES[currentPage]}</h1>
+          <div className="w-8"></div> {/* Spacer for centering */}
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto relative">
           {children}
         </main>
       </div>

@@ -5,44 +5,44 @@ import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 
-const REFRESH_INTERVAL = 9000; // 9 segundos rigorosos
+const REFRESH_INTERVAL = 9000;
 
 const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Veiculo) => void; isTracking: boolean }> = ({ vehicle, onStartCollection, isTracking }) => {
   const getStatusChip = (status: Veiculo['status']) => {
     switch (status) {
       case 'aguardando_coleta':
-        return <div className="px-2 py-1 text-xs font-black uppercase text-yellow-800 bg-yellow-400 rounded-md shadow-sm border border-yellow-500">Disponível</div>;
+        return <div className="px-2 py-1 text-[10px] font-black uppercase text-yellow-900 bg-yellow-400 rounded shadow-sm border border-yellow-500">Aguardando</div>;
       case 'em_transito':
-        return <div className="px-2 py-1 text-xs font-black uppercase text-blue-100 bg-blue-600 rounded-md shadow-sm border border-blue-400">Em Rota</div>;
+        return <div className="px-2 py-1 text-[10px] font-black uppercase text-blue-100 bg-blue-600 rounded shadow-sm border border-blue-400">Em Rota</div>;
       default:
         return null;
     }
   };
 
   return (
-    <div className="bg-gray-800 p-5 rounded-2xl shadow-xl space-y-4 border border-gray-700 hover:border-blue-500/50 transition-all duration-300 transform active:scale-[0.98]">
+    <div className="bg-gray-800 p-5 rounded-2xl shadow-xl space-y-4 border border-gray-700 hover:border-blue-500/30 transition-all duration-300">
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <h3 className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-1">{vehicle.modelo || 'Veículo'}</h3>
-          <p className="text-3xl font-mono font-black bg-white text-black rounded-lg px-3 py-1 inline-block shadow-inner ring-2 ring-gray-600">
+          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-1">{vehicle.modelo || 'Veículo'}</p>
+          <p className="text-3xl font-mono font-black bg-white text-black rounded-lg px-3 py-1 inline-block shadow-lg">
             {vehicle.placa}
           </p>
         </div>
         {getStatusChip(vehicle.status)}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm bg-gray-900/60 p-4 rounded-xl border border-gray-700/50">
+      <div className="grid grid-cols-2 gap-3 text-sm bg-gray-900/40 p-3 rounded-xl border border-gray-700/30">
         <div>
-          <p className="text-gray-500 text-[10px] uppercase font-bold">Cor</p>
-          <p className="text-gray-200 font-medium">{vehicle.cor || '---'}</p>
+          <p className="text-gray-500 text-[9px] uppercase font-black">Cor</p>
+          <p className="text-gray-200 font-bold">{vehicle.cor || '---'}</p>
         </div>
         <div>
-          <p className="text-gray-500 text-[10px] uppercase font-bold">Ano</p>
-          <p className="text-gray-200 font-medium">{vehicle.ano || '---'}</p>
+          <p className="text-gray-500 text-[9px] uppercase font-black">Ano</p>
+          <p className="text-gray-200 font-bold">{vehicle.ano || '---'}</p>
         </div>
         <div className="col-span-2 pt-2 border-t border-gray-700/50">
-          <p className="text-gray-500 text-[10px] uppercase font-bold">Proprietário</p>
-          <p className="text-gray-200 font-medium truncate">{vehicle.proprietario_nome || 'Não informado'}</p>
+          <p className="text-gray-500 text-[9px] uppercase font-black">Solicitante / Proprietário</p>
+          <p className="text-gray-200 font-bold truncate">{vehicle.proprietario_nome || 'Não informado'}</p>
         </div>
       </div>
 
@@ -50,19 +50,20 @@ const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Vei
         <button
           onClick={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             onStartCollection(vehicle);
           }}
-          className="w-full py-4 bg-green-600 hover:bg-green-500 active:bg-green-700 rounded-xl text-white font-black uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-3 group"
+          className="w-full py-4 bg-green-600 hover:bg-green-500 active:bg-green-700 rounded-xl text-white font-black uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-3"
         >
-          <span>Iniciar Coleta</span>
-          <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+          <span>PEGAR COLETA</span>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
         </button>
       )}
 
-      {vehicle.status === 'em_transito' && isTracking && (
-        <div className="w-full py-4 bg-blue-900/30 border-2 border-blue-500/30 rounded-xl text-blue-400 font-black text-center flex items-center justify-center gap-3">
-           <div className="animate-ping w-2 h-2 bg-green-400 rounded-full"></div>
-           RASTREAMENTO ATIVO
+      {vehicle.status === 'em_transito' && (isTracking || vehicle.motorista_id) && (
+        <div className="w-full py-4 bg-blue-900/20 border border-blue-500/30 rounded-xl text-blue-400 font-black text-center flex items-center justify-center gap-3">
+           <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+           EM ANDAMENTO
         </div>
       )}
     </div>
@@ -71,12 +72,11 @@ const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Vei
 
 const DriverDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { sendNotification, requestPermission, permission, playChime } = useNotifications();
+  const { sendNotification, playChime } = useNotifications();
   const [vehicles, setVehicles] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [trackingVehicleId, setTrackingVehicleId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   
   const seenVehicleIds = useRef<Set<string>>(new Set());
@@ -85,7 +85,6 @@ const DriverDashboard: React.FC = () => {
 
   const syncData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
-    setError(null);
     
     try {
       const { data, error: fetchError } = await supabase
@@ -95,46 +94,47 @@ const DriverDashboard: React.FC = () => {
 
       if (fetchError) throw fetchError;
       
-      const fetchedVehicles = (data as Veiculo[]) || [];
+      const currentList = (data as Veiculo[]) || [];
       
-      // Lógica de Notificação de Novas Coletas
+      // Lógica de Notificação de Novas Coletas (Apenas após o primeiro load)
       if (initialLoadDone.current) {
-        fetchedVehicles.forEach(v => {
+        currentList.forEach(v => {
           if (v.status === 'aguardando_coleta' && !seenVehicleIds.current.has(v.id)) {
-            sendNotification('NOVA COLETA! 🚚', {
-              body: `Placa ${v.placa} disponível para retirada imediata.`,
+            sendNotification('ALERTA DE COLETA! 🚚', {
+              body: `Veículo Placa ${v.placa} disponível agora.`,
               tag: v.id
             });
+            // Adiciona aos vistos para não repetir
             seenVehicleIds.current.add(v.id);
           }
         });
       } else {
-        // Popula o set inicial sem notificar
-        fetchedVehicles.forEach(v => seenVehicleIds.current.add(v.id));
+        // Popula o set inicial sem notificar no primeiro acesso
+        currentList.forEach(v => seenVehicleIds.current.add(v.id));
         initialLoadDone.current = true;
       }
 
-      setVehicles(fetchedVehicles);
+      setVehicles(currentList);
     } catch (err: any) {
-      console.error('Falha na sincronização:', err);
-      setError('Falha de conexão. O sistema tentará novamente em instantes.');
+      console.error('Erro de Sync:', err);
+      setError('Problema na conexão. Sincronizando...');
     } finally {
       if (!isSilent) setLoading(false);
     }
   }, [sendNotification]);
 
-  // Efeito principal de Pooling e Realtime
   useEffect(() => {
     syncData();
 
-    // Polling de 9 segundos inquebrável
+    // Reset de intervalo para garantir apenas um rodando
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    
     pollTimerRef.current = window.setInterval(() => {
       syncData(true);
     }, REFRESH_INTERVAL);
 
-    // Canal Realtime para atualizações instantâneas do pátio
     const channel = supabase
-      .channel('driver_main_stream')
+      .channel('driver_live_v4')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => {
           syncData(true);
       })
@@ -154,14 +154,13 @@ const DriverDashboard: React.FC = () => {
     );
   }, [vehicles, searchTerm]);
   
-  const startTracking = async (vehicle: Veiculo) => {
+  const handleStartCollection = async (vehicle: Veiculo) => {
     if (!user) return;
     
     setLoading(true);
     setError(null);
 
     try {
-      // 1. Atualiza no Supabase
       const { error: updateError } = await supabase
           .from('veiculos')
           .update({ 
@@ -172,32 +171,16 @@ const DriverDashboard: React.FC = () => {
       
       if(updateError) throw updateError;
 
-      // 2. Atualiza estado local IMEDIATAMENTE (Otimista)
-      setVehicles(prev => prev.map(v => v.id === vehicle.id ? { ...v, status: 'em_transito', motorista_id: user.id } : v));
-      setTrackingVehicleId(vehicle.id);
-      
-      // 3. Força um sync silencioso para confirmar dados
-      await syncData(true);
-
-      // 4. Direciona para o Mapa
+      // Sucesso: Redireciona e atualiza
       if (vehicle.lat && vehicle.lng) {
-          const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${vehicle.lat},${vehicle.lng}`;
-          window.open(mapsUrl, '_blank');
+          window.open(`https://www.google.com/maps/dir/?api=1&destination=${vehicle.lat},${vehicle.lng}`, '_blank');
       }
 
-      // 5. Inicia rastreamento GPS em background
-      const trackLoc = () => {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          supabase.from('veiculos').update({ lat: pos.coords.latitude, lng: pos.coords.longitude }).eq('id', vehicle.id);
-        }, null, { enableHighAccuracy: true });
-      };
-      trackLoc();
-      window.setInterval(trackLoc, 15000);
+      await syncData(true);
 
     } catch (err: any) {
-      console.error(err);
-      setError('Esta coleta já foi iniciada por outro motorista ou houve um erro de rede.');
-      syncData(false);
+      setError('Esta coleta não está mais disponível.');
+      await syncData(false);
     } finally {
       setLoading(false);
     }
@@ -205,81 +188,69 @@ const DriverDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900" onClick={() => playChime()}>
-      <header className="p-4 border-b border-gray-800 bg-gray-900/80 backdrop-blur-xl sticky top-0 z-10 shadow-2xl">
+      <header className="p-4 border-b border-gray-800 bg-gray-900/90 backdrop-blur-xl sticky top-0 z-10">
           <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-2xl font-black text-white italic tracking-tighter">MINHAS COLETAS</h2>
-                <div className="flex items-center gap-2 mt-1">
-                   <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                   <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{isConnected ? 'Sincronizado' : 'Reconectando...'}</span>
-                </div>
+              <div className="flex items-center gap-3">
+                 <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 animate-pulse'}`}></div>
+                 <h2 className="text-xl font-black text-white uppercase italic">Minhas Coletas</h2>
               </div>
               <button 
                   onClick={() => syncData(false)}
-                  className="p-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-400 hover:text-white transition-all active:rotate-180 duration-500"
+                  className="p-2 text-gray-400 hover:text-white transition-all active:scale-90"
               >
                   <svg className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
               </button>
           </div>
           
-          <input 
-              type="text"
-              placeholder="🔍 Filtrar placa ou modelo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-5 py-4 bg-gray-800 border-2 border-gray-700 rounded-2xl text-white font-bold focus:border-blue-500 transition-all outline-none shadow-inner"
-          />
+          <div className="relative">
+            <input 
+                type="text"
+                placeholder="Pesquisar placa ou modelo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full px-5 py-3 bg-gray-800 border-2 border-gray-700 rounded-xl text-white font-bold outline-none focus:border-blue-500 transition-all text-sm"
+            />
+          </div>
       </header>
 
-      <main className="flex-1 p-4 overflow-y-auto space-y-4 bg-gray-900/40">
-        {permission !== 'granted' && (
-            <button 
-                className="w-full p-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 animate-pulse" 
-                onClick={(e) => { e.stopPropagation(); requestPermission(); }}
-            >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                Ativar Alertas de Chamada
-            </button>
-        )}
-
+      <main className="flex-1 p-4 overflow-y-auto space-y-4">
         {error && (
-            <div className="bg-red-500/20 border-2 border-red-500/30 p-4 rounded-2xl text-red-400 text-xs font-black text-center uppercase tracking-wider">
-                ⚠️ {error}
+            <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl text-red-500 text-xs font-black text-center uppercase tracking-widest">
+                {error}
             </div>
         )}
         
         {loading && vehicles.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24">
-                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-6"></div>
-                <p className="font-black text-gray-600 uppercase tracking-widest text-sm">Consultando Pátio...</p>
+            <div className="flex flex-col items-center justify-center py-20 opacity-40">
+                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="font-black text-[10px] uppercase tracking-widest">Sincronizando...</p>
             </div>
         ) : filteredVehicles.length === 0 ? (
-            <div className="text-center py-32 px-10 border-4 border-dashed border-gray-800 rounded-[40px] opacity-40">
-                <span className="text-7xl mb-6 block">📭</span>
-                <h3 className="text-white font-black text-xl uppercase tracking-tighter">Nenhuma Coleta</h3>
-                <p className="text-gray-400 text-sm mt-3 font-medium">Fique atento! Novas solicitações aparecem aqui automaticamente.</p>
+            <div className="text-center py-32 opacity-20 flex flex-col items-center">
+                <span className="text-6xl mb-4">🚚</span>
+                <p className="text-white font-black uppercase text-sm">Sem coletas pendentes</p>
+                <p className="text-white text-[10px] mt-1">Aguarde o alerta sonoro de nova coleta</p>
             </div>
         ) : (
-            <div className="grid grid-cols-1 gap-5">
+            <div className="grid grid-cols-1 gap-4">
                 {filteredVehicles.map((v) => (
                   <VehicleCard 
                       key={v.id} 
                       vehicle={v} 
-                      onStartCollection={startTracking} 
-                      isTracking={trackingVehicleId === v.id || v.motorista_id === user?.id}
+                      onStartCollection={handleStartCollection} 
+                      isTracking={v.motorista_id === user?.id}
                   />
                 ))}
             </div>
         )}
       </main>
       
-      <div className="p-4 bg-gray-800/90 border-t border-gray-700 flex justify-between items-center safe-area-bottom">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Alerta Online</p>
-          </div>
-          <button onClick={playChime} className="text-[10px] font-black text-blue-400 uppercase underline decoration-2 underline-offset-4">Testar Som</button>
-      </div>
+      <footer className="p-3 bg-gray-800/50 border-t border-gray-700 flex justify-between items-center safe-area-bottom">
+          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
+            Sincronização 9s: <span className="text-green-500">{isConnected ? 'ON' : 'OFF'}</span>
+          </p>
+          <button onClick={playChime} className="text-[9px] font-black text-blue-400 hover:text-white uppercase underline decoration-2 underline-offset-4">Testar Alerta</button>
+      </footer>
     </div>
   );
 };

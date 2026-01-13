@@ -5,7 +5,7 @@ import { Veiculo, VehicleStatus, Movimentacao } from '../types';
 import CheckInModal from './CheckInModal';
 import CheckoutModal from './CheckoutModal';
 
-const REFRESH_INTERVAL = 9000; // 9 segundos
+const REFRESH_INTERVAL = 9000;
 
 const STATUS_CONFIG: Record<VehicleStatus, { label: string; bg: string; text: string; border: string }> = {
     'aguardando_coleta': { label: 'Aguardando', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
@@ -53,7 +53,7 @@ const VehicleRow: React.FC<{
                     {vehicle.status === 'no_patio' && onCheckout && (
                         <button 
                             onClick={() => onCheckout(vehicle)}
-                            className="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
+                            className="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-700 rounded-xl text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
                         >
                             Checkout
                         </button>
@@ -97,6 +97,7 @@ const Patio: React.FC = () => {
             .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => fetchVehicles(true))
             .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
+        if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = window.setInterval(() => {
             fetchVehicles(true);
         }, REFRESH_INTERVAL);
@@ -163,7 +164,7 @@ const Patio: React.FC = () => {
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-2 border-gray-700 rounded-2xl shadow-xl">
                         <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            {isConnected ? 'Tempo Real' : 'Atualizando 9s'}
+                            {isConnected ? 'Realtime' : 'Poll 9s'}
                         </span>
                     </div>
                 </div>
@@ -202,7 +203,7 @@ const Patio: React.FC = () => {
                     </div>
                 ) : filteredVehicles.length === 0 ? (
                     <div className="text-center py-32 border-4 border-dashed border-gray-800 rounded-[40px] opacity-30">
-                        <p className="text-white font-black uppercase text-sm">Nenhum veículo neste filtro</p>
+                        <p className="text-white font-black uppercase text-sm">Nenhum veículo encontrado</p>
                     </div>
                 ) : (
                     filteredVehicles.map(v => (

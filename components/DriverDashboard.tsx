@@ -5,7 +5,7 @@ import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 
-const REFRESH_INTERVAL = 9000; // 9 segundos conforme solicitado
+const REFRESH_INTERVAL = 9000; // 9 segundos cravados
 
 const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Veiculo) => void; isTracking: boolean }> = ({ vehicle, onStartCollection, isTracking }) => {
   const getStatusChip = (status: Veiculo['status']) => {
@@ -63,7 +63,11 @@ const DriverDashboard: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [trackingVehicleId, setTrackingVehicleId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  
+  // Ref para rastrear IDs já vistos e evitar notificações duplicadas
+  const seenVehicleIds = useRef<Set<string>>(new Set());
   const intervalRef = useRef<number | null>(null);
+  const pollRef = useRef<number | null>(null);
 
   const fetchInitialVehicles = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -73,52 +77,60 @@ const DriverDashboard: React.FC = () => {
       .in('status', ['aguardando_coleta', 'em_transito']);
 
     if (error) {
-      setError('Falha ao carregar coletas.');
-    } else {
-      setVehicles(data as Veiculo[]);
+      setError('Erro na sincronização de dados.');
+    } else if (data) {
+      const vehicleList = data as Veiculo[];
+      
+      // Lógica de Notificação para novos itens
+      vehicleList.forEach(v => {
+          if (v.status === 'aguardando_coleta' && !seenVehicleIds.current.has(v.id)) {
+              sendNotification('Nova Coleta Disponível! 🚚', {
+                  body: `Placa: ${v.placa} - ${v.modelo || 'Veículo identificado'}`,
+                  tag: 'nova-coleta-' + v.id
+              });
+              seenVehicleIds.current.add(v.id);
+          }
+      });
+
+      // Limpar IDs que não estão mais na lista (opcional, para manter o Set limpo)
+      const currentIds = new Set(vehicleList.map(v => v.id));
+      seenVehicleIds.current.forEach(id => {
+          if (!currentIds.has(id)) seenVehicleIds.current.delete(id);
+      });
+
+      setVehicles(vehicleList);
     }
     if (!isSilent) setLoading(false);
-  }, []);
+  }, [sendNotification]);
 
   useEffect(() => {
     if (permission === 'default') {
       requestPermission();
     }
 
+    // Primeira busca
     fetchInitialVehicles();
 
+    // Setup Realtime
     const channel = supabase
-      .channel('driver_realtime_9s')
+      .channel('driver_realtime_v3')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'veiculos' },
-        (payload) => {
-          const newVehicle = payload.new as Veiculo;
-          if (newVehicle.status === 'aguardando_coleta') {
-            setVehicles(curr => [newVehicle, ...curr]);
-            sendNotification('Nova Coleta! 🚚', {
-              body: `Veículo placa ${newVehicle.placa} disponível.`,
-              tag: 'nova-coleta'
-            });
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'veiculos' },
+        { event: '*', schema: 'public', table: 'veiculos' },
         () => fetchInitialVehicles(true)
       )
       .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
-    const pollInterval = setInterval(() => {
+    // Configuração do Polling de 9 segundos
+    pollRef.current = window.setInterval(() => {
         fetchInitialVehicles(true);
     }, REFRESH_INTERVAL);
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(pollInterval);
+      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [fetchInitialVehicles, sendNotification, permission, requestPermission]);
+  }, [fetchInitialVehicles, permission, requestPermission]);
 
   const filteredVehicles = useMemo(() => {
     if (!searchTerm.trim()) return vehicles;
@@ -132,7 +144,6 @@ const DriverDashboard: React.FC = () => {
   const startTracking = async (vehicle: Veiculo) => {
     if (!user) return;
     
-    // Feedback visual imediato: marca como carregando
     setLoading(true);
 
     const { error } = await supabase
@@ -142,13 +153,12 @@ const DriverDashboard: React.FC = () => {
     
     if(error) {
         setLoading(false);
-        setError('Erro ao iniciar coleta.');
+        setError('Falha ao iniciar coleta. Verifique sua conexão.');
         return;
     }
 
-    // ATUALIZAÇÃO IMEDIATA DA LISTA
+    // ATUALIZAÇÃO IMEDIATA: Remove o loading e força o fetch
     await fetchInitialVehicles(true);
-    
     setTrackingVehicleId(vehicle.id);
 
     if(vehicle.lat && vehicle.lng){
@@ -172,34 +182,57 @@ const DriverDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900" onClick={() => playChime()}>
-      <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center justify-between mb-4">
+      <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 space-y-3">
+          <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-white">Minhas Coletas</h2>
               <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-800/50 border border-gray-700">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Ao Vivo' : '9s Poll'}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Sincronizado' : 'Refresh 9s'}</span>
               </div>
           </div>
-          <input 
-              type="text"
-              placeholder="Buscar por placa..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-4 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"
-          />
+          
+          <div className="flex gap-2">
+            <input 
+                type="text"
+                placeholder="Buscar placa..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
+            />
+            <button 
+                onClick={() => fetchInitialVehicles(false)}
+                className="p-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-gray-300 transition-colors"
+                title="Atualizar Agora"
+            >
+                <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+          </div>
       </header>
 
       <main className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
         {permission !== 'granted' && (
-            <div className="p-3 bg-blue-600/20 border border-blue-500/50 rounded-lg text-blue-400 text-xs text-center mb-2" onClick={() => requestPermission()}>
-                Clique aqui para permitir notificações e alertas sonoros.
+            <button 
+                className="w-full p-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white text-sm font-bold flex items-center justify-center gap-2 mb-2 transition-all shadow-lg animate-pulse" 
+                onClick={(e) => { e.stopPropagation(); requestPermission(); }}
+            >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                ATIVAR ALERTAS SONOROS
+            </button>
+        )}
+        
+        {loading && vehicles.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p>Buscando atualizações...</p>
             </div>
         )}
         
-        {loading && <div className="text-center py-10 text-gray-500">Atualizando coletas...</div>}
-        
         {!loading && filteredVehicles.length === 0 && (
-            <div className="text-center py-20 text-gray-600">Nenhuma coleta no momento.</div>
+            <div className="text-center py-20">
+                <div className="text-gray-600 mb-2">🚚</div>
+                <p className="text-gray-500 text-sm">Nenhuma nova coleta pendente.</p>
+                <p className="text-gray-600 text-xs mt-1">Atualizando automaticamente em {REFRESH_INTERVAL / 1000}s</p>
+            </div>
         )}
 
         {filteredVehicles.map((v) => (

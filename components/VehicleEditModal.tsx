@@ -101,7 +101,10 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             const fileExt = file.name.split('.').pop();
             const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
             const { error: uploadError } = await supabase.storage.from('veiculos_fotos').upload(fileName, file);
-            if (uploadError) continue;
+            if (uploadError) {
+                console.error("Erro no upload:", uploadError);
+                continue;
+            }
             const { data: { publicUrl } } = supabase.storage.from('veiculos_fotos').getPublicUrl(fileName);
             uploadedUrls.push(publicUrl);
         }
@@ -156,7 +159,7 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[5000] p-4" onClick={onClose}>
             <div className="bg-gray-800 rounded-[32px] w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl border border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
                 
-                {/* Header idêntico ao layout padrão */}
+                {/* Header idêntico à tela de Solicitação */}
                 <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
                     <h2 className="text-2xl font-black text-white flex items-center gap-3">
                         <span className="bg-white text-black px-3 py-1 rounded-lg font-mono">{vehicle.placa}</span>
@@ -167,9 +170,9 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                     </button>
                 </div>
 
-                {/* Corpo do Modal (Reutilizando estrutura da Solicitação) */}
+                {/* Corpo do Modal - Reutilizando visual de SolicitaçãoColeta */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-gray-900">
-                    <form onSubmit={handleSave} id="edit-vehicle-form" className="space-y-8">
+                    <form onSubmit={handleSave} id="edit-vehicle-form" className="space-y-8 pb-10">
                         {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-xl text-center border border-red-500/50 font-bold">{error}</div>}
 
                         {/* Seção: Dados do Veículo */}
@@ -184,32 +187,32 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                                 <InputField label="Renavam" name="renavam" value={formData.renavam} onChange={handleChange} />
                             </div>
 
-                            {/* Gestão de Fotos Reutilizada */}
+                            {/* Área de Fotos (Idêntica à Solicitação) */}
                             <div className="pt-4 border-t border-gray-700/50">
                                 <label className="block text-sm font-medium text-gray-300 mb-4">Fotos de Avaria / Estado do Veículo (Máx. 6)</label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                                    {/* Fotos Existentes no Banco */}
+                                    {/* Fotos já salvas */}
                                     {existingPhotos.map((url, index) => (
                                         <div key={`existing-${index}`} className="relative aspect-square group">
-                                            <img src={url} alt="Existente" className="w-full h-full object-cover rounded-xl border-2 border-blue-500/50" />
+                                            <img src={url} alt="Salva" className="w-full h-full object-cover rounded-xl border-2 border-blue-500/50 shadow-lg" />
                                             <button 
                                                 type="button"
                                                 onClick={() => removeExistingFile(index)}
-                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500"
+                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                             </button>
                                         </div>
                                     ))}
                                     
-                                    {/* Previews de Novas Fotos */}
+                                    {/* Novas fotos (previews) */}
                                     {previews.map((preview, index) => (
                                         <div key={`new-${index}`} className="relative aspect-square group">
-                                            <img src={preview} alt="Nova" className="w-full h-full object-cover rounded-xl border-2 border-green-500/50" />
+                                            <img src={preview} alt="Nova" className="w-full h-full object-cover rounded-xl border-2 border-green-500/50 shadow-lg" />
                                             <button 
                                                 type="button"
                                                 onClick={() => removeNewFile(index)}
-                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500"
+                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                             </button>
@@ -220,7 +223,7 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                                         <button 
                                             type="button"
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="aspect-square bg-gray-900 border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center hover:border-blue-500 text-gray-500 hover:text-blue-400 transition-all"
+                                            className="aspect-square bg-gray-900 border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center hover:border-blue-500 text-gray-500 hover:text-blue-400 transition-all shadow-inner"
                                         >
                                             <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
                                             <span className="text-[10px] font-black uppercase">Adicionar</span>
@@ -236,7 +239,7 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                                     name="observacoes" 
                                     value={formData.observacoes} 
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-inner"
                                     rows={3}
                                 />
                             </div>
@@ -264,11 +267,11 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                     </form>
                 </div>
 
-                {/* Footer idêntico ao layout padrão */}
+                {/* Footer Modal */}
                 <div className="p-6 border-t border-gray-700 flex gap-3 bg-gray-900/80 backdrop-blur-md">
                     <button 
                         onClick={onClose}
-                        className="flex-1 py-4 bg-gray-700 hover:bg-gray-600 rounded-2xl text-white font-black uppercase tracking-widest text-xs transition-all"
+                        className="flex-1 py-4 bg-gray-700 hover:bg-gray-600 rounded-2xl text-white font-black uppercase tracking-widest text-xs transition-all shadow-lg active:scale-95"
                     >
                         Cancelar
                     </button>
@@ -276,7 +279,7 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                         form="edit-vehicle-form"
                         type="submit"
                         disabled={loading}
-                        className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-2xl text-white font-black uppercase tracking-widest text-xs transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center gap-2"
+                        className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-2xl text-white font-black uppercase tracking-widest text-xs transition-all shadow-xl shadow-blue-900/20 flex items-center justify-center gap-2 active:scale-95"
                     >
                         {loading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : 'Salvar Alterações'}
                     </button>

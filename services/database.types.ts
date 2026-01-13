@@ -186,6 +186,7 @@ export type Database = {
           p_proprietario_rua: string | null
           p_proprietario_telefone: string | null
           p_renavam: string | null
+          p_fotos_avaria_url: string[] | null
         }
         Returns: undefined
       }

@@ -8,8 +8,8 @@ import CheckoutModal from './CheckoutModal';
 const REFRESH_INTERVAL = 9000; // 9 segundos
 
 const STATUS_CONFIG: Record<VehicleStatus, { label: string; bg: string; text: string; border: string }> = {
-    'aguardando_coleta': { label: 'Aguardando Coleta', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
-    'em_transito': { label: 'Em Trânsito', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
+    'aguardando_coleta': { label: 'Aguardando', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
+    'em_transito': { label: 'Em Rota', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
     'no_patio': { label: 'No Pátio', bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-indigo-500' },
     'finalizado': { label: 'Finalizado', bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500' },
 };
@@ -22,18 +22,20 @@ const VehicleRow: React.FC<{
     const config = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG['aguardando_coleta'];
 
     return (
-        <div className={`bg-gray-800 p-4 rounded-xl shadow-lg border-l-4 ${config.border} flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-gray-750 animate-in fade-in slide-in-from-left-4 duration-300`}>
+        <div className={`bg-gray-800 p-4 rounded-2xl shadow-lg border-l-8 ${config.border} flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-gray-750 duration-300`}>
             <div className="flex items-center gap-4">
                 <div className="flex flex-col">
-                    <span className="text-2xl font-mono font-bold bg-white text-black px-2 py-1 rounded-md self-start mb-1 shadow-sm">
+                    <span className="text-2xl font-mono font-black bg-white text-black px-3 py-1 rounded-lg self-start mb-1 shadow-inner">
                         {vehicle.placa}
                     </span>
-                    <span className="text-gray-300 font-medium">{vehicle.modelo || 'Sem Modelo'} <span className="text-gray-500 text-sm">• {vehicle.cor || 'Sem Cor'}</span></span>
+                    <span className="text-gray-300 font-bold uppercase text-xs tracking-tight">
+                        {vehicle.modelo || 'Sem Modelo'} • <span className="text-gray-500">{vehicle.cor || 'Sem Cor'}</span>
+                    </span>
                 </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${config.bg} ${config.text}`}>
+                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${config.bg} ${config.text} ${config.border.replace('border-', 'border-opacity-30 border-')}`}>
                     {config.label}
                 </span>
                 
@@ -43,7 +45,7 @@ const VehicleRow: React.FC<{
                     {(vehicle.status === 'aguardando_coleta' || vehicle.status === 'em_transito') && onCheckIn && (
                         <button 
                             onClick={() => onCheckIn(vehicle)}
-                            className="w-full sm:w-auto px-6 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-bold transition-all shadow-md active:scale-95"
+                            className="w-full sm:w-auto px-8 py-2.5 bg-green-600 hover:bg-green-500 rounded-xl text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
                         >
                             Check-in
                         </button>
@@ -51,7 +53,7 @@ const VehicleRow: React.FC<{
                     {vehicle.status === 'no_patio' && onCheckout && (
                         <button 
                             onClick={() => onCheckout(vehicle)}
-                            className="w-full sm:w-auto px-6 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-bold transition-all shadow-md active:scale-95"
+                            className="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-500 rounded-xl text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
                         >
                             Checkout
                         </button>
@@ -91,12 +93,8 @@ const Patio: React.FC = () => {
         fetchVehicles();
 
         const channel = supabase
-            .channel('patio_live_sync')
-            .on(
-                'postgres_changes',
-                { event: '*', schema: 'public', table: 'veiculos' },
-                () => fetchVehicles(true)
-            )
+            .channel('patio_live_monitor')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => fetchVehicles(true))
             .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
         pollRef.current = window.setInterval(() => {
@@ -129,10 +127,7 @@ const Patio: React.FC = () => {
 
         if (movError) throw movError;
 
-        await supabase
-            .from('veiculos')
-            .update({ status: 'no_patio' })
-            .eq('id', vehicleId);
+        await supabase.from('veiculos').update({ status: 'no_patio' }).eq('id', vehicleId);
         
         await fetchVehicles(true);
         setVehicleForCheckIn(null);
@@ -146,9 +141,7 @@ const Patio: React.FC = () => {
             .update({ data_saida: dataSaida, total_pago: totalPago, forma_pagamento: 'Checkout Pátio' })
             .eq('id', movimentacao.id);
 
-        await supabase
-            .from('financeiro')
-            .insert({
+        await supabase.from('financeiro').insert({
                 tipo: 'entrada',
                 valor: totalPago,
                 descricao: `Checkout Pátio - Placa ${vehicleForCheckout?.placa}`,
@@ -156,10 +149,7 @@ const Patio: React.FC = () => {
                 data: dataSaida,
             });
 
-        await supabase
-            .from('veiculos')
-            .update({ status: 'finalizado' })
-            .eq('id', movimentacao.veiculo_id);
+        await supabase.from('veiculos').update({ status: 'finalizado' }).eq('id', movimentacao.veiculo_id);
         
         await fetchVehicles(true);
         setVehicleForCheckout(null);
@@ -168,43 +158,52 @@ const Patio: React.FC = () => {
     return (
         <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900 overflow-hidden">
             <header className="mb-6 flex-shrink-0">
-                <div className="flex items-center justify-between mb-4">
-                    <h1 className="text-2xl font-black text-white uppercase tracking-tight">Gestão de Pátio</h1>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full">
-                        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">Gestão do Pátio</h1>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-2 border-gray-700 rounded-2xl shadow-xl">
+                        <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            {isConnected ? 'Realtime' : '9s Poll'}
+                            {isConnected ? 'Tempo Real' : 'Atualizando 9s'}
                         </span>
                     </div>
                 </div>
                 
-                <div className="bg-gray-800 p-3 rounded-2xl border border-gray-700 flex flex-col md:flex-row gap-3">
-                    <input 
-                        type="text" 
-                        placeholder="Pesquisar placa ou modelo..." 
-                        className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white outline-none focus:border-blue-500 transition-all"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0">
-                        {(['todos', 'no_patio', 'em_transito'] as const).map(s => (
+                <div className="bg-gray-800 p-4 rounded-3xl border border-gray-700 shadow-2xl space-y-4">
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            placeholder="Pesquisar por placa ou modelo..." 
+                            className="w-full pl-12 pr-4 py-3 bg-gray-900 border-2 border-gray-700 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all shadow-inner"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <svg className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        {(['todos', 'aguardando_coleta', 'em_transito', 'no_patio'] as const).map(s => (
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap transition-all ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-650'}`}
+                                className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${statusFilter === s ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-900/40' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-650'}`}
                             >
-                                {s === 'todos' ? 'Todos' : STATUS_CONFIG[s as VehicleStatus]?.label || s}
+                                {s === 'todos' ? 'Ver Todos' : STATUS_CONFIG[s as VehicleStatus]?.label || s}
                             </button>
                         ))}
                     </div>
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+            <main className="flex-1 overflow-y-auto space-y-4 custom-scrollbar pb-10">
                 {loading && !vehicles.length ? (
-                    <div className="text-center py-20 text-gray-600 font-bold uppercase text-xs animate-pulse">Sincronizando inventário...</div>
+                    <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                        <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="font-black text-xs uppercase tracking-widest text-white">Sincronizando Inventário...</p>
+                    </div>
                 ) : filteredVehicles.length === 0 ? (
-                    <div className="text-center py-20 text-gray-700 italic">Nenhum veículo encontrado com este filtro.</div>
+                    <div className="text-center py-32 border-4 border-dashed border-gray-800 rounded-[40px] opacity-30">
+                        <p className="text-white font-black uppercase text-sm">Nenhum veículo neste filtro</p>
+                    </div>
                 ) : (
                     filteredVehicles.map(v => (
                         <VehicleRow 

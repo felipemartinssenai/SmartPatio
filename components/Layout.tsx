@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
-import { Profile } from '../types';
-import { Page } from '../App';
+import { Profile, Page } from '../types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,11 +14,11 @@ interface LayoutProps {
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: 'Dashboard Operacional',
   collections: 'Minhas Coletas',
-  checkin: 'Check-in de Veículos',
   financials: 'Controle Financeiro',
   solicitacao_coleta: 'Solicitar Nova Coleta',
   patio: 'Gerenciamento do Pátio',
   fechamentos: 'Relatório de Fechamentos',
+  user_management: 'Gestão de Usuários',
 };
 
 

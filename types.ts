@@ -3,11 +3,22 @@ export type UserRole = 'admin' | 'operador' | 'motorista';
 export type VehicleStatus = 'aguardando_coleta' | 'em_transito' | 'no_patio' | 'finalizado';
 export type TransactionType = 'entrada' | 'saida';
 
+// Definição das páginas para controle de acesso
+export type Page = 
+  | 'dashboard' 
+  | 'collections' 
+  | 'financials' 
+  | 'solicitacao_coleta' 
+  | 'patio' 
+  | 'fechamentos'
+  | 'user_management';
+
 export interface Profile {
   id: string;
   full_name: string;
   avatar_url?: string;
   cargo: UserRole;
+  permissions: Page[]; // Array de strings com as chaves das páginas permitidas
 }
 
 export interface Veiculo {

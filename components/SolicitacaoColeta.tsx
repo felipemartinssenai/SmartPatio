@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
-import { Page } from '../App';
+import { Page } from '../types';
 
 interface SolicitacaoColetaProps {
     setCurrentPage: (page: Page) => void;
@@ -69,23 +69,22 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
     setError(null);
     setSuccess(null);
 
+    // Fixed payload to match the expected individual arguments in database.types.ts
     const payload = {
-      p_data: {
-        p_ano: formData.ano ? parseInt(formData.ano, 10) : null,
-        p_chassi: formData.chassi || null,
-        p_cor: formData.cor || null,
-        p_modelo: formData.modelo || null,
-        p_observacoes: formData.observacoes || null,
-        p_placa: formData.placa.toUpperCase().trim(),
-        p_proprietario_bairro: formData.proprietarioBairro || null,
-        p_proprietario_cep: formData.proprietarioCep || null,
-        p_proprietario_cpf: formData.proprietarioCpf || null,
-        p_proprietario_nome: formData.proprietarioNome || null,
-        p_proprietario_numero: formData.proprietarioNumero || null,
-        p_proprietario_rua: formData.proprietarioRua || null,
-        p_proprietario_telefone: formData.proprietarioTelefone || null,
-        p_renavam: formData.renavam || null,
-      }
+      p_ano: formData.ano ? parseInt(formData.ano, 10) : null,
+      p_chassi: formData.chassi || null,
+      p_cor: formData.cor || null,
+      p_modelo: formData.modelo || null,
+      p_observacoes: formData.observacoes || null,
+      p_placa: formData.placa.toUpperCase().trim(),
+      p_proprietario_bairro: formData.proprietarioBairro || null,
+      p_proprietario_cep: formData.proprietarioCep || null,
+      p_proprietario_cpf: formData.proprietarioCpf || null,
+      p_proprietario_nome: formData.proprietarioNome || null,
+      p_proprietario_numero: formData.proprietarioNumero || null,
+      p_proprietario_rua: formData.proprietarioRua || null,
+      p_proprietario_telefone: formData.proprietarioTelefone || null,
+      p_renavam: formData.renavam || null,
     };
 
     const { error: rpcError } = await supabase.rpc('create_new_vehicle_collection', payload);

@@ -16,18 +16,21 @@ export type Database = {
           full_name: string | null
           avatar_url: string | null
           cargo: "admin" | "operador" | "motorista"
+          permissions: string[] | null
         }
         Insert: {
           id: string
           full_name?: string | null
           avatar_url?: string | null
           cargo: "admin" | "operador" | "motorista"
+          permissions?: string[] | null
         }
         Update: {
           id?: string
           full_name?: string | null
           avatar_url?: string | null
           cargo?: "admin" | "operador" | "motorista"
+          permissions?: string[] | null
         }
       }
       veiculos: {

@@ -15,8 +15,6 @@ const initialFormState = {
   chassi: '',
   renavam: '',
   observacoes: '',
-  infracoes: '',
-  multas: '',
   proprietarioNome: '',
   proprietarioTelefone: '',
   proprietarioCpf: '',
@@ -78,8 +76,6 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
         p_cor: formData.cor || null,
         p_modelo: formData.modelo || null,
         p_observacoes: formData.observacoes || null,
-        p_infracoes: formData.infracoes || null,
-        p_multas: formData.multas || null,
         p_placa: formData.placa.toUpperCase().trim(),
         p_proprietario_bairro: formData.proprietarioBairro || null,
         p_proprietario_cep: formData.proprietarioCep || null,
@@ -126,29 +122,6 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
               <InputField label="Chassi" name="chassi" value={formData.chassi} onChange={handleChange} />
               <InputField label="Renavam" name="renavam" value={formData.renavam} onChange={handleChange} />
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-300">Infrações</label>
-                    <textarea 
-                        name="infracoes" 
-                        value={formData.infracoes} 
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows={2}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-300">Multas</label>
-                    <textarea 
-                        name="multas" 
-                        value={formData.multas} 
-                        onChange={handleChange}
-                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows={2}
-                    />
-                </div>
-            </div>
 
             <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-300">Observações Gerais</label>
@@ -158,6 +131,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
                     onChange={handleChange}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     rows={3}
+                    placeholder="Informações adicionais sobre o estado do veículo ou local da coleta..."
                 />
             </div>
           </fieldset>

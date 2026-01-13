@@ -16,7 +16,17 @@ const AuthComponent: React.FC = () => {
     try {
       // Cast to any to bypass problematic type exports in this environment
       const { error } = await (supabase.auth as any).signInWithPassword({ email, password });
-      if (error) throw error;
+      
+      if (error) {
+        // Trata o erro de e-mail não confirmado especificamente
+        if (error.message.includes('Email not confirmed')) {
+          setError('⚠️ E-mail pendente de confirmação. Execute o "Script de Auto-Confirmação" no Supabase SQL Editor ou desative a confirmação de e-mail nas configurações de Auth do Supabase.');
+        } else if (error.message === 'Invalid login credentials') {
+          setError('E-mail ou senha incorretos.');
+        } else {
+          throw error;
+        }
+      }
     } catch (error: any) {
       setError(error.error_description || error.message || 'Erro ao realizar login');
     } finally {
@@ -36,8 +46,8 @@ const AuthComponent: React.FC = () => {
         </div>
         
         {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl text-xs font-bold text-center">
-                {error === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : error}
+            <div className={`p-4 rounded-xl text-xs font-bold text-center border ${error.includes('⚠️') ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-500' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                {error}
             </div>
         )}
 
@@ -77,7 +87,7 @@ const AuthComponent: React.FC = () => {
         
         <div className="pt-4 border-t border-gray-800 text-center">
             <p className="text-[10px] text-gray-600 uppercase font-bold tracking-widest">
-                Versão 6.0 Enterprise
+                Versão 6.1 Enterprise
             </p>
         </div>
       </div>

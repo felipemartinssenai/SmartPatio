@@ -6,9 +6,12 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.0
--- IMPORTANTE: Para desativar a confirmação de e-mail, vá no painel do Supabase em:
--- Auth -> Providers -> Email -> DESATIVE "Confirm Email"
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.1 (Bypass Confirmação de E-mail)
+-- ⚠️ IMPORTANTE: Para desativar a confirmação de e-mail permanentemente:
+-- Vá no painel do Supabase em: Auth -> Providers -> Email -> DESATIVE "Confirm Email"
+
+-- 0. CONFIRMAR TODOS OS USUÁRIOS ATUAIS (Resolve erro de login pendente)
+UPDATE auth.users SET email_confirmed_at = now() WHERE email_confirmed_at IS NULL;
 
 -- 1. TIPOS E ENUMS
 DO $$ BEGIN
@@ -144,9 +147,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 7. CONFIGURAÇÃO FORÇADA DO SEU USUÁRIO ADMIN E AUTO-CONFIRMAÇÃO
-UPDATE auth.users SET email_confirmed_at = now() WHERE email = 'felipemartinssenai@gmail.com';
-
+-- 7. CONFIGURAÇÃO FORÇADA DO SEU USUÁRIO ADMIN
 UPDATE public.profiles 
 SET cargo = 'admin', 
     permissions = ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management']::text[]
@@ -171,14 +172,14 @@ DROP POLICY IF EXISTS "Acesso total fin" ON public.financeiro;
 CREATE POLICY "Acesso total fin" ON public.financeiro FOR ALL USING (auth.role() = 'authenticated');`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.0 (Completo)');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.1 (Bypass Email)');
 
   if (!isOpen) return null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v7.0 (Completo)'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v7.1 (Bypass Email)'), 2000);
   };
 
   return (
@@ -186,16 +187,16 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-4">
             <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-white">Setup Geral do Sistema</h2>
-                <p className="text-xs text-blue-400 font-black uppercase tracking-widest mt-1">Versão 7.0 Definitiva</p>
+                <h2 className="text-xl font-bold text-white">Setup Geral (v7.1)</h2>
+                <p className="text-xs text-yellow-400 font-black uppercase tracking-widest mt-1">Correção de Confirmação de E-mail</p>
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
         
-        <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl mb-4 text-xs text-blue-200">
-            Este script configura <b>todas as tabelas, funções e o seu usuário Administrador Root</b>. Execute-o no SQL Editor do Supabase para o sistema funcionar corretamente.
+        <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl mb-4 text-xs text-yellow-200">
+            <b>Instrução Crítica:</b> Se o login falhar com "E-mail não confirmado", copie este script e execute no SQL Editor do Supabase. Ele confirmará todos os usuários instantaneamente.
         </div>
 
         <pre className="bg-black p-4 rounded-xl overflow-auto flex-1 text-[10px] font-mono text-green-400 border border-gray-700 custom-scrollbar">

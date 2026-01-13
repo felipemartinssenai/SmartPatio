@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { Page } from '../types';
 
@@ -36,9 +36,12 @@ const InputField: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label
 
 const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage }) => {
   const [formData, setFormData] = useState(initialFormState);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const maskPhone = (value: string) => {
     return value
@@ -58,6 +61,51 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
     }
   }, []);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length + selectedFiles.length > 6) {
+        setError('Limite máximo de 6 fotos por veículo.');
+        return;
+    }
+
+    const newPreviews = files.map(file => URL.createObjectURL(file));
+    setSelectedFiles(prev => [...prev, ...files]);
+    setPreviews(prev => [...prev, ...newPreviews]);
+    setError(null);
+  };
+
+  const removeFile = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadImages = async (placa: string): Promise<string[]> => {
+    const uploadedUrls: string[] = [];
+    
+    for (const file of selectedFiles) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        
+        const { data, error: uploadError } = await supabase.storage
+            .from('veiculos_fotos')
+            .upload(fileName, file);
+        
+        if (uploadError) {
+            console.error('Erro no upload de foto:', uploadError);
+            continue;
+        }
+
+        const { data: { publicUrl } } = supabase.storage
+            .from('veiculos_fotos')
+            .getPublicUrl(fileName);
+        
+        uploadedUrls.push(publicUrl);
+    }
+    
+    return uploadedUrls;
+  };
+
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.placa) {
@@ -69,37 +117,50 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
     setError(null);
     setSuccess(null);
 
-    // Fixed payload to match the expected individual arguments in database.types.ts
-    const payload = {
-      p_ano: formData.ano ? parseInt(formData.ano, 10) : null,
-      p_chassi: formData.chassi || null,
-      p_cor: formData.cor || null,
-      p_modelo: formData.modelo || null,
-      p_observacoes: formData.observacoes || null,
-      p_placa: formData.placa.toUpperCase().trim(),
-      p_proprietario_bairro: formData.proprietarioBairro || null,
-      p_proprietario_cep: formData.proprietarioCep || null,
-      p_proprietario_cpf: formData.proprietarioCpf || null,
-      p_proprietario_nome: formData.proprietarioNome || null,
-      p_proprietario_numero: formData.proprietarioNumero || null,
-      p_proprietario_rua: formData.proprietarioRua || null,
-      p_proprietario_telefone: formData.proprietarioTelefone || null,
-      p_renavam: formData.renavam || null,
-    };
+    try {
+        const placaFormatada = formData.placa.toUpperCase().trim();
+        let fotoUrls: string[] = [];
+        
+        // 1. Upload das Fotos se houverem
+        if (selectedFiles.length > 0) {
+            fotoUrls = await uploadImages(placaFormatada);
+        }
 
-    const { error: rpcError } = await supabase.rpc('create_new_vehicle_collection', payload);
+        // 2. Chamada RPC com URLs das fotos
+        const payload = {
+          p_ano: formData.ano ? parseInt(formData.ano, 10) : null,
+          p_chassi: formData.chassi || null,
+          p_cor: formData.cor || null,
+          p_modelo: formData.modelo || null,
+          p_observacoes: formData.observacoes || null,
+          p_placa: placaFormatada,
+          p_proprietario_bairro: formData.proprietarioBairro || null,
+          p_proprietario_cep: formData.proprietarioCep || null,
+          p_proprietario_cpf: formData.proprietarioCpf || null,
+          p_proprietario_nome: formData.proprietarioNome || null,
+          p_proprietario_numero: formData.proprietarioNumero || null,
+          p_proprietario_rua: formData.proprietarioRua || null,
+          p_proprietario_telefone: formData.proprietarioTelefone || null,
+          p_renavam: formData.renavam || null,
+          p_fotos_avaria_url: fotoUrls.length > 0 ? fotoUrls : null
+        };
 
-    if (rpcError) {
-      console.error('Erro RPC:', rpcError);
-      setError(`Erro ao salvar: ${rpcError.message}`);
-    } else {
-      setSuccess(`Coleta para ${formData.placa.toUpperCase()} solicitada com sucesso!`);
-      setFormData(initialFormState);
-      setTimeout(() => setCurrentPage('patio'), 2000);
+        const { error: rpcError } = await supabase.rpc('create_new_vehicle_collection', payload);
+
+        if (rpcError) throw rpcError;
+
+        setSuccess(`Coleta para ${placaFormatada} solicitada com sucesso!`);
+        setFormData(initialFormState);
+        setSelectedFiles([]);
+        setPreviews([]);
+        setTimeout(() => setCurrentPage('patio'), 2000);
+    } catch (err: any) {
+        console.error('Erro na solicitação:', err);
+        setError(`Erro ao salvar: ${err.message}`);
+    } finally {
+        setLoading(false);
     }
-
-    setLoading(false);
-  }, [formData, setCurrentPage]);
+  }, [formData, selectedFiles, setCurrentPage]);
 
   return (
     <div className="p-4 sm:p-8 h-full bg-gray-900 overflow-y-auto">
@@ -120,6 +181,44 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
               <InputField label="Ano" name="ano" type="number" value={formData.ano} onChange={handleChange} placeholder="2024" />
               <InputField label="Chassi" name="chassi" value={formData.chassi} onChange={handleChange} />
               <InputField label="Renavam" name="renavam" value={formData.renavam} onChange={handleChange} />
+            </div>
+
+            {/* Upload de Fotos */}
+            <div className="pt-4 border-t border-gray-700/50">
+                <label className="block text-sm font-medium text-gray-300 mb-4">Fotos de Avaria / Estado do Veículo (Máx. 6)</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                    {previews.map((preview, index) => (
+                        <div key={index} className="relative aspect-square group">
+                            <img src={preview} alt={`Preview ${index}`} className="w-full h-full object-cover rounded-xl border-2 border-gray-700" />
+                            <button 
+                                type="button"
+                                onClick={() => removeFile(index)}
+                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                    ))}
+                    
+                    {previews.length < 6 && (
+                        <button 
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="aspect-square bg-gray-900 border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center hover:border-blue-500 hover:bg-gray-850 transition-all text-gray-500 hover:text-blue-400"
+                        >
+                            <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                            <span className="text-[10px] font-black uppercase">Adicionar</span>
+                        </button>
+                    )}
+                </div>
+                <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    accept="image/*" 
+                    multiple 
+                    className="hidden" 
+                />
             </div>
 
             <div className="space-y-2">
@@ -171,7 +270,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
             {loading ? (
                 <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Sincronizando...
+                    Enviando Dados e Fotos...
                 </>
             ) : 'Criar Solicitação de Coleta'}
           </button>

@@ -6,11 +6,12 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.1 (Bypass Confirmação de E-mail)
--- ⚠️ IMPORTANTE: Para desativar a confirmação de e-mail permanentemente:
--- Vá no painel do Supabase em: Auth -> Providers -> Email -> DESATIVE "Confirm Email"
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.2 (Suporte a Fotos)
+-- ⚠️ IMPORTANTE: 
+-- 1. Crie um bucket chamado 'veiculos_fotos' no Storage do Supabase.
+-- 2. Torne o bucket PÚBLICO.
 
--- 0. CONFIRMAR TODOS OS USUÁRIOS ATUAIS (Resolve erro de login pendente)
+-- 0. CONFIRMAR TODOS OS USUÁRIOS ATUAIS
 UPDATE auth.users SET email_confirmed_at = now() WHERE email_confirmed_at IS NULL;
 
 -- 1. TIPOS E ENUMS
@@ -23,7 +24,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 2. TABELA DE PERFIS (PROFILES)
+-- 2. TABELA DE PERFIS
 CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text,
@@ -32,14 +33,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     permissions text[] DEFAULT ARRAY['collections']::text[]
 );
 
--- Garantir que a coluna permissions existe
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='profiles' AND column_name='permissions') THEN
-        ALTER TABLE public.profiles ADD COLUMN permissions text[] DEFAULT ARRAY['collections']::text[];
-    END IF;
-END $$;
-
--- 3. TABELA DE VEÍCULOS (ESTRUTURA COMPLETA)
+-- 3. TABELA DE VEÍCULOS
 CREATE TABLE IF NOT EXISTS public.veiculos (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     placa text NOT NULL,
@@ -65,7 +59,40 @@ CREATE TABLE IF NOT EXISTS public.veiculos (
     created_at timestamptz DEFAULT now()
 );
 
--- 4. MOVIMENTAÇÕES E FINANCEIRO
+-- 4. FUNÇÃO RPC PARA CRIAR COLETA (ATUALIZADA v7.2)
+CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(
+    p_placa text,
+    p_modelo text DEFAULT NULL,
+    p_cor text DEFAULT NULL,
+    p_ano integer DEFAULT NULL,
+    p_chassi text DEFAULT NULL,
+    p_renavam text DEFAULT NULL,
+    p_observacoes text DEFAULT NULL,
+    p_proprietario_nome text DEFAULT NULL,
+    p_proprietario_telefone text DEFAULT NULL,
+    p_proprietario_cpf text DEFAULT NULL,
+    p_proprietario_cep text DEFAULT NULL,
+    p_proprietario_rua text DEFAULT NULL,
+    p_proprietario_bairro text DEFAULT NULL,
+    p_proprietario_numero text DEFAULT NULL,
+    p_fotos_avaria_url text[] DEFAULT NULL
+) RETURNS void AS $$
+BEGIN
+    INSERT INTO public.veiculos (
+        placa, modelo, cor, ano, chassi, renavam, observacoes,
+        proprietario_nome, proprietario_telefone, proprietario_cpf,
+        proprietario_cep, proprietario_rua, proprietario_bairro, proprietario_numero,
+        fotos_avaria_url, status
+    ) VALUES (
+        p_placa, p_modelo, p_cor, p_ano, p_chassi, p_renavam, p_observacoes,
+        p_proprietario_nome, p_proprietario_telefone, p_proprietario_cpf,
+        p_proprietario_cep, p_proprietario_rua, p_proprietario_bairro, p_proprietario_numero,
+        p_fotos_avaria_url, 'aguardando_coleta'
+    );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 5. MOVIMENTAÇÕES E FINANCEIRO
 CREATE TABLE IF NOT EXISTS public.movimentacoes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     veiculo_id uuid REFERENCES public.veiculos(id),
@@ -85,38 +112,6 @@ CREATE TABLE IF NOT EXISTS public.financeiro (
     data timestamptz DEFAULT now(),
     movimentacao_id uuid REFERENCES public.movimentacoes(id)
 );
-
--- 5. FUNÇÃO RPC PARA CRIAR COLETA (USADA NO FRONTEND)
-CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(
-    p_placa text,
-    p_modelo text DEFAULT NULL,
-    p_cor text DEFAULT NULL,
-    p_ano integer DEFAULT NULL,
-    p_chassi text DEFAULT NULL,
-    p_renavam text DEFAULT NULL,
-    p_observacoes text DEFAULT NULL,
-    p_proprietario_nome text DEFAULT NULL,
-    p_proprietario_telefone text DEFAULT NULL,
-    p_proprietario_cpf text DEFAULT NULL,
-    p_proprietario_cep text DEFAULT NULL,
-    p_proprietario_rua text DEFAULT NULL,
-    p_proprietario_bairro text DEFAULT NULL,
-    p_proprietario_numero text DEFAULT NULL
-) RETURNS void AS $$
-BEGIN
-    INSERT INTO public.veiculos (
-        placa, modelo, cor, ano, chassi, renavam, observacoes,
-        proprietario_nome, proprietario_telefone, proprietario_cpf,
-        proprietario_cep, proprietario_rua, proprietario_bairro, proprietario_numero,
-        status
-    ) VALUES (
-        p_placa, p_modelo, p_cor, p_ano, p_chassi, p_renavam, p_observacoes,
-        p_proprietario_nome, p_proprietario_telefone, p_proprietario_cpf,
-        p_proprietario_cep, p_proprietario_rua, p_proprietario_bairro, p_proprietario_numero,
-        'aguardando_coleta'
-    );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 6. TRIGGER DE AUTOMATIZAÇÃO DE PERFIL
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -172,14 +167,14 @@ DROP POLICY IF EXISTS "Acesso total fin" ON public.financeiro;
 CREATE POLICY "Acesso total fin" ON public.financeiro FOR ALL USING (auth.role() = 'authenticated');`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.1 (Bypass Email)');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.2 (Fotos)');
 
   if (!isOpen) return null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v7.1 (Bypass Email)'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v7.2 (Fotos)'), 2000);
   };
 
   return (
@@ -187,16 +182,16 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-4">
             <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-white">Setup Geral (v7.1)</h2>
-                <p className="text-xs text-yellow-400 font-black uppercase tracking-widest mt-1">Correção de Confirmação de E-mail</p>
+                <h2 className="text-xl font-bold text-white">Setup Geral (v7.2)</h2>
+                <p className="text-xs text-blue-400 font-black uppercase tracking-widest mt-1">Suporte a Fotos de Avaria</p>
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
         
-        <div className="bg-yellow-500/10 border border-yellow-500/30 p-4 rounded-xl mb-4 text-xs text-yellow-200">
-            <b>Instrução Crítica:</b> Se o login falhar com "E-mail não confirmado", copie este script e execute no SQL Editor do Supabase. Ele confirmará todos os usuários instantaneamente.
+        <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl mb-4 text-xs text-blue-200">
+            <b>Atenção:</b> Este script atualiza o sistema para suportar fotos. Lembre-se de criar o bucket <u>veiculos_fotos</u> no seu Supabase Storage.
         </div>
 
         <pre className="bg-black p-4 rounded-xl overflow-auto flex-1 text-[10px] font-mono text-green-400 border border-gray-700 custom-scrollbar">

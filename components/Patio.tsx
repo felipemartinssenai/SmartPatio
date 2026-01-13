@@ -158,6 +158,8 @@ const Patio: React.FC = () => {
         
         if (vecError) throw vecError;
         
+        // ATUALIZAÇÃO IMEDIATA
+        fetchVehicles(true);
         setVehicleForCheckIn(null);
     };
 
@@ -190,6 +192,8 @@ const Patio: React.FC = () => {
         
         if(vecError) throw vecError;
 
+        // ATUALIZAÇÃO IMEDIATA
+        fetchVehicles(true);
         setVehicleForCheckout(null);
     };
 

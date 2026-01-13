@@ -181,6 +181,9 @@ const DriverDashboard: React.FC = () => {
         return;
     }
 
+    // DISPARO IMEDIATO DO REFRESH APÓS AÇÃO
+    fetchInitialVehicles(true);
+    
     setTrackingVehicleId(vehicle.id);
 
     if(vehicle.lat && vehicle.lng){

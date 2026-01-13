@@ -10,15 +10,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storageKey: 'patiolog-auth-token',
-    storage: window.localStorage
+    storageKey: 'patiolog-session-v1',
+    storage: window.localStorage,
+    flowType: 'pkce'
   },
   db: {
     schema: 'public',
-  },
-  global: {
-    headers: {
-      'X-Client-Version': `patiolog-v${crypto.randomUUID()}`,
-    },
-  },
+  }
 });

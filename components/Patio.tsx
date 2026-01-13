@@ -5,7 +5,7 @@ import { Veiculo, VehicleStatus, Movimentacao } from '../types';
 import CheckInModal from './CheckInModal';
 import CheckoutModal from './CheckoutModal';
 
-const REFRESH_INTERVAL = 10000; // 10 segundos
+const REFRESH_INTERVAL = 9000; // 9 segundos conforme solicitado
 
 const STATUS_CONFIG: Record<VehicleStatus, { label: string; bg: string; text: string; border: string }> = {
     'aguardando_coleta': { label: 'Aguardando Coleta', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
@@ -92,37 +92,17 @@ const Patio: React.FC = () => {
     useEffect(() => {
         fetchVehicles();
 
-        // Configuração do Realtime
         const channel = supabase
-            .channel('patio_realtime')
+            .channel('patio_realtime_9s')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'veiculos' },
-                (payload) => {
-                    if (payload.eventType === 'INSERT') {
-                        const newVehicle = payload.new as Veiculo;
-                        if (newVehicle.status !== 'finalizado') {
-                            setVehicles(prev => [newVehicle, ...prev]);
-                        }
-                    } else if (payload.eventType === 'UPDATE') {
-                        const updatedVehicle = payload.new as Veiculo;
-                        if (updatedVehicle.status === 'finalizado') {
-                            setVehicles(prev => prev.filter(v => v.id !== updatedVehicle.id));
-                        } else {
-                            setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
-                        }
-                    } else if (payload.eventType === 'DELETE') {
-                        setVehicles(prev => prev.filter(v => v.id !== payload.old.id));
-                    }
-                }
+                () => fetchVehicles(true)
             )
-            .subscribe((status) => {
-                setIsConnected(status === 'SUBSCRIBED');
-            });
+            .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
-        // Configuração do Auto-Refresh (Polling) como fallback
         const pollInterval = setInterval(() => {
-            fetchVehicles(true); // Chamada silenciosa sem loading spinner
+            fetchVehicles(true);
         }, REFRESH_INTERVAL);
 
         return () => {
@@ -151,14 +131,11 @@ const Patio: React.FC = () => {
 
         if (movError) throw movError;
 
-        const { error: vecError } = await supabase
+        await supabase
             .from('veiculos')
             .update({ status: 'no_patio' })
             .eq('id', vehicleId);
         
-        if (vecError) throw vecError;
-        
-        // ATUALIZAÇÃO IMEDIATA
         fetchVehicles(true);
         setVehicleForCheckIn(null);
     };
@@ -166,14 +143,12 @@ const Patio: React.FC = () => {
     const handleConfirmCheckout = async (movimentacao: Movimentacao, totalPago: number) => {
         const dataSaida = new Date().toISOString();
 
-        const { error: movError } = await supabase
+        await supabase
             .from('movimentacoes')
             .update({ data_saida: dataSaida, total_pago: totalPago, forma_pagamento: 'Checkout Pátio' })
             .eq('id', movimentacao.id);
 
-        if(movError) throw movError;
-
-        const { error: finError } = await supabase
+        await supabase
             .from('financeiro')
             .insert({
                 tipo: 'entrada',
@@ -183,16 +158,11 @@ const Patio: React.FC = () => {
                 data: dataSaida,
             });
 
-        if(finError) throw finError;
-
-        const { error: vecError } = await supabase
+        await supabase
             .from('veiculos')
             .update({ status: 'finalizado' })
             .eq('id', movimentacao.veiculo_id);
         
-        if(vecError) throw vecError;
-
-        // ATUALIZAÇÃO IMEDIATA
         fetchVehicles(true);
         setVehicleForCheckout(null);
     };
@@ -201,69 +171,50 @@ const Patio: React.FC = () => {
         <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900">
             <header className="mb-8">
                 <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-white">Gerenciamento do Pátio</h1>
+                    <h1 className="text-3xl font-bold text-white">Pátio</h1>
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-full shadow-sm">
                         <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                            {isConnected ? 'Live' : 'Polling Activo'}
+                            {isConnected ? 'Sincronizado' : '9s Refresh'}
                         </span>
                     </div>
                 </div>
                 
                 <div className="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 flex flex-col md:flex-row gap-4">
-                    <div className="flex-1 relative">
-                        <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                        <input 
-                            type="text" 
-                            placeholder="Buscar por placa ou modelo..." 
-                            className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    
-                    <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
-                        {(['todos', 'aguardando_coleta', 'em_transito', 'no_patio'] as const).map(s => (
+                    <input 
+                        type="text" 
+                        placeholder="Buscar placa..." 
+                        className="flex-1 px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <div className="flex gap-2 overflow-x-auto">
+                        {(['todos', 'no_patio', 'em_transito'] as const).map(s => (
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all duration-200 ${
-                                    statusFilter === s 
-                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-800' 
-                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                }`}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase whitespace-nowrap ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}
                             >
-                                {s === 'todos' ? 'Todos' : STATUS_CONFIG[s as VehicleStatus].label}
+                                {s === 'todos' ? 'Todos' : STATUS_CONFIG[s as VehicleStatus]?.label || s}
                             </button>
                         ))}
                     </div>
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-                {loading && (
-                    <div className="flex flex-col items-center justify-center py-20">
-                        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-gray-400">Carregando inventário...</p>
-                    </div>
+            <main className="flex-1 overflow-y-auto space-y-4 custom-scrollbar">
+                {loading && !vehicles.length ? (
+                    <div className="text-center py-20 text-gray-500">Buscando pátio...</div>
+                ) : (
+                    filteredVehicles.map(v => (
+                        <VehicleRow 
+                            key={v.id} 
+                            vehicle={v} 
+                            onCheckIn={setVehicleForCheckIn}
+                            onCheckout={setVehicleForCheckout}
+                        />
+                    ))
                 )}
-
-                {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg text-center border border-red-500/50">{error}</div>}
-
-                {!loading && filteredVehicles.length === 0 && (
-                    <div className="text-center py-20 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">
-                        <p className="text-gray-500 text-lg">Nenhum veículo encontrado para os filtros ativos.</p>
-                    </div>
-                )}
-
-                {filteredVehicles.map(v => (
-                    <VehicleRow 
-                        key={v.id} 
-                        vehicle={v} 
-                        onCheckIn={setVehicleForCheckIn}
-                        onCheckout={setVehicleForCheckout}
-                    />
-                ))}
             </main>
 
             <CheckInModal 

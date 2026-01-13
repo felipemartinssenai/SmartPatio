@@ -5,7 +5,7 @@ import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 
-const REFRESH_INTERVAL = 10000;
+const REFRESH_INTERVAL = 9000; // 9 segundos conforme solicitado
 
 const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Veiculo) => void; isTracking: boolean }> = ({ vehicle, onStartCollection, isTracking }) => {
   const getStatusChip = (status: Veiculo['status']) => {
@@ -56,7 +56,7 @@ const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Vei
 
 const DriverDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { sendNotification, requestPermission, permission } = useNotifications();
+  const { sendNotification, requestPermission, permission, playChime } = useNotifications();
   const [vehicles, setVehicles] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +73,7 @@ const DriverDashboard: React.FC = () => {
       .in('status', ['aguardando_coleta', 'em_transito']);
 
     if (error) {
-      setError('Falha ao carregar coletas disponíveis.');
+      setError('Falha ao carregar coletas.');
     } else {
       setVehicles(data as Veiculo[]);
     }
@@ -81,7 +81,6 @@ const DriverDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Solicita permissão de notificação assim que o motorista abre o dashboard
     if (permission === 'default') {
       requestPermission();
     }
@@ -89,36 +88,27 @@ const DriverDashboard: React.FC = () => {
     fetchInitialVehicles();
 
     const channel = supabase
-      .channel('driver_realtime')
+      .channel('driver_realtime_9s')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'veiculos' },
+        { event: 'INSERT', schema: 'public', table: 'veiculos' },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newVehicle = payload.new as Veiculo;
-            if (newVehicle.status === 'aguardando_coleta') {
-              setVehicles((current) => [newVehicle, ...current]);
-              
-              // Notificação Nativa do Sistema (Push-like)
-              sendNotification('Nova Coleta Disponível! 🚚', {
-                body: `Veículo ${newVehicle.modelo || ''} (Placa: ${newVehicle.placa}) aguarda retirada. Clique para ver detalhes.`,
-                tag: 'nova-coleta',
-                renotify: true
-              });
-            }
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedVehicle = payload.new as Veiculo;
-            if (!['aguardando_coleta', 'em_transito'].includes(updatedVehicle.status)) {
-                setVehicles(prev => prev.filter(v => v.id !== updatedVehicle.id));
-            } else {
-                setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
-            }
+          const newVehicle = payload.new as Veiculo;
+          if (newVehicle.status === 'aguardando_coleta') {
+            setVehicles(curr => [newVehicle, ...curr]);
+            sendNotification('Nova Coleta! 🚚', {
+              body: `Veículo placa ${newVehicle.placa} disponível.`,
+              tag: 'nova-coleta'
+            });
           }
         }
       )
-      .subscribe((status) => {
-          setIsConnected(status === 'SUBSCRIBED');
-      });
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'veiculos' },
+        () => fetchInitialVehicles(true)
+      )
+      .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
     const pollInterval = setInterval(() => {
         fetchInitialVehicles(true);
@@ -141,7 +131,9 @@ const DriverDashboard: React.FC = () => {
   
   const startTracking = async (vehicle: Veiculo) => {
     if (!user) return;
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    
+    // Feedback visual imediato: marca como carregando
+    setLoading(true);
 
     const { error } = await supabase
         .from('veiculos')
@@ -149,11 +141,14 @@ const DriverDashboard: React.FC = () => {
         .eq('id', vehicle.id);
     
     if(error) {
-        setError('Não foi possível iniciar a coleta.');
+        setLoading(false);
+        setError('Erro ao iniciar coleta.');
         return;
     }
 
-    fetchInitialVehicles(true);
+    // ATUALIZAÇÃO IMEDIATA DA LISTA
+    await fetchInitialVehicles(true);
+    
     setTrackingVehicleId(vehicle.id);
 
     if(vehicle.lat && vehicle.lng){
@@ -171,41 +166,43 @@ const DriverDashboard: React.FC = () => {
     };
 
     updateLoc();
+    if (intervalRef.current) clearInterval(intervalRef.current);
     intervalRef.current = window.setInterval(updateLoc, 15000);
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900">
-      <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 space-y-4">
-          <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full bg-gray-900" onClick={() => playChime()}>
+      <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10">
+          <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-white">Minhas Coletas</h2>
               <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-800/50 border border-gray-700">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Sincronizado' : 'Offline'}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Ao Vivo' : '9s Poll'}</span>
               </div>
           </div>
-          
-          <div className="relative">
-              <input 
-                  type="text"
-                  placeholder="Buscar veículo..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
-              />
-          </div>
+          <input 
+              type="text"
+              placeholder="Buscar por placa..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-4 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white"
+          />
       </header>
 
       <main className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
-        {permission === 'denied' && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg text-yellow-500 text-xs mb-4">
-            Atenção: Notificações desativadas. Você não será alertado sobre novas coletas.
-          </div>
+        {permission !== 'granted' && (
+            <div className="p-3 bg-blue-600/20 border border-blue-500/50 rounded-lg text-blue-400 text-xs text-center mb-2" onClick={() => requestPermission()}>
+                Clique aqui para permitir notificações e alertas sonoros.
+            </div>
+        )}
+        
+        {loading && <div className="text-center py-10 text-gray-500">Atualizando coletas...</div>}
+        
+        {!loading && filteredVehicles.length === 0 && (
+            <div className="text-center py-20 text-gray-600">Nenhuma coleta no momento.</div>
         )}
 
-        {loading && <div className="text-center py-10 text-gray-500">Buscando coletas...</div>}
-        
-        {!loading && filteredVehicles.map((v) => (
+        {filteredVehicles.map((v) => (
           <VehicleCard key={v.id} vehicle={v} onStartCollection={startTracking} isTracking={trackingVehicleId === v.id}/>
         ))}
       </main>

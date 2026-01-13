@@ -7,15 +7,9 @@ interface SqlSetupModalProps {
 }
 
 const SQL_SCRIPT = `-- 0. RESET COMPLETO DO BANCO DE DADOS
--- CUIDADO: Este script apaga e recria a estrutura para garantir que tudo funcione.
-
--- Limpeza profunda de funções e gatilhos antigos
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
-DROP FUNCTION IF EXISTS public.get_my_role() CASCADE;
 DROP FUNCTION IF EXISTS public.create_new_vehicle_collection CASCADE;
-
--- Limpeza de tabelas e tipos
 DROP TABLE IF EXISTS public.financeiro CASCADE;
 DROP TABLE IF EXISTS public.movimentacoes CASCADE;
 DROP TABLE IF EXISTS public.veiculos CASCADE;
@@ -23,11 +17,9 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 DROP TYPE IF EXISTS public.vehicle_status;
 DROP TYPE IF EXISTS public.user_role;
 
--- 1. CRIAÇÃO DE TIPOS
 CREATE TYPE public.user_role AS ENUM ('admin', 'operador', 'motorista');
 CREATE TYPE public.vehicle_status AS ENUM ('aguardando_coleta', 'em_transito', 'no_patio', 'finalizado');
 
--- 2. TABELAS
 CREATE TABLE public.profiles (
     id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text,
@@ -44,6 +36,8 @@ CREATE TABLE public.veiculos (
     chassi text,
     renavam text,
     observacoes text,
+    infracoes text, -- Novo
+    multas text,    -- Novo
     status public.vehicle_status NOT NULL DEFAULT 'aguardando_coleta',
     lat double precision,
     lng double precision,
@@ -80,7 +74,6 @@ CREATE TABLE public.financeiro (
     movimentacao_id uuid REFERENCES public.movimentacoes(id)
 );
 
--- 3. GATILHO DE PERFIL (Melhorado para evitar falhas)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -94,11 +87,6 @@ BEGIN
     COALESCE((new.raw_user_meta_data->>'cargo')::public.user_role, 'motorista'::public.user_role)
   );
   RETURN new;
-EXCEPTION WHEN OTHERS THEN
-  -- Fallback para garantir que o usuário seja criado mesmo se o profile falhar
-  INSERT INTO public.profiles (id, full_name, cargo)
-  VALUES (new.id, 'Usuário (Erro Setup)', 'motorista');
-  RETURN new;
 END;
 $$;
 
@@ -106,7 +94,6 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 4. FUNÇÃO RPC (Padrão JSONB - Infalível contra erros de cache)
 CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(p_data jsonb)
 RETURNS void
 LANGUAGE plpgsql
@@ -118,12 +105,8 @@ DECLARE
 BEGIN
   v_placa := upper(trim(p_data->>'p_placa'));
   
-  IF v_placa IS NULL OR v_placa = '' THEN
-    RAISE EXCEPTION 'A placa do veículo é obrigatória.';
-  END IF;
-
   INSERT INTO public.veiculos (
-      placa, modelo, cor, ano, chassi, renavam, observacoes,
+      placa, modelo, cor, ano, chassi, renavam, observacoes, infracoes, multas,
       proprietario_nome, proprietario_telefone, proprietario_cpf, 
       proprietario_cep, proprietario_rua, proprietario_bairro, 
       proprietario_numero, status
@@ -136,6 +119,8 @@ BEGIN
       p_data->>'p_chassi',
       p_data->>'p_renavam',
       p_data->>'p_observacoes',
+      p_data->>'p_infracoes',
+      p_data->>'p_multas',
       p_data->>'p_proprietario_nome',
       p_data->>'p_proprietario_telefone',
       p_data->>'p_proprietario_cpf',
@@ -148,17 +133,12 @@ BEGIN
 END;
 $$;
 
--- Permissões
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.veiculos ENABLE ROW LEVEL SECURITY;
 GRANT EXECUTE ON FUNCTION public.create_new_vehicle_collection TO authenticated;
-
--- Políticas Básicas
 CREATE POLICY "Profiles view" ON public.profiles FOR SELECT USING (true);
 CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Veiculos all" ON public.veiculos FOR ALL USING (auth.role() = 'authenticated');
-
-NOTIFY pgrst, 'reload schema';
 `;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
@@ -176,7 +156,7 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[5000] p-4" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <h2 className="text-xl font-bold mb-4">Setup do Banco de Dados</h2>
-        <p className="text-sm text-gray-400 mb-4">Execute este script no SQL Editor do Supabase para corrigir os erros de função e perfil.</p>
+        <p className="text-sm text-gray-400 mb-4">Execute este script no SQL Editor do Supabase para suportar os novos campos de Infrações e Multas.</p>
         <pre className="bg-black p-4 rounded overflow-auto flex-1 text-xs font-mono text-green-400">
           <code>{SQL_SCRIPT}</code>
         </pre>

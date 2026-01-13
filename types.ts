@@ -19,20 +19,20 @@ export interface Veiculo {
   lat?: number;
   lng?: number;
   codigo_infracao_ctb?: string;
+  infracoes?: string; // Novo campo
+  multas?: string;    // Novo campo
   fotos_avaria_url?: string[];
   proprietario_nome?: string;
   proprietario_telefone?: string;
   motorista_id?: string;
   created_at: string;
-  profiles?: Profile; // For joining data
+  profiles?: Profile;
   
-  // Novos campos do veículo
   ano?: number;
   chassi?: string;
   renavam?: string;
   observacoes?: string;
 
-  // Novos campos do proprietário
   proprietario_cpf?: string;
   proprietario_cep?: string;
   proprietario_rua?: string;
@@ -78,7 +78,6 @@ export interface AppNotification {
 export interface FechamentoDetalhe {
     movimentacao_id: string;
     veiculo_id: string;
-    // Vehicle fields
     placa: string;
     modelo: string;
     cor: string;
@@ -86,7 +85,8 @@ export interface FechamentoDetalhe {
     chassi: string;
     renavam: string;
     observacoes: string;
-    // Owner fields
+    infracoes?: string;
+    multas?: string;
     proprietario_nome: string;
     proprietario_telefone: string;
     proprietario_cpf: string;
@@ -94,7 +94,6 @@ export interface FechamentoDetalhe {
     proprietario_rua: string;
     proprietario_bairro: string;
     proprietario_numero: string;
-    // Movement fields
     data_entrada: string;
     data_saida: string;
     valor_diaria: number;

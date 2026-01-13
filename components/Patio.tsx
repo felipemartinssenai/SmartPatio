@@ -93,7 +93,7 @@ const Patio: React.FC = () => {
         fetchVehicles();
 
         const channel = supabase
-            .channel('patio_live_monitor')
+            .channel('patio_live_sync_v2')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => fetchVehicles(true))
             .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
@@ -160,11 +160,11 @@ const Patio: React.FC = () => {
         <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900 overflow-hidden">
             <header className="mb-6 flex-shrink-0">
                 <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-4xl font-black text-white italic tracking-tighter uppercase">Gestão do Pátio</h1>
+                    <h1 className="text-3xl font-extrabold text-white tracking-tight">Gestão do Pátio</h1>
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-2 border-gray-700 rounded-2xl shadow-xl">
                         <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            {isConnected ? 'Realtime' : 'Poll 9s'}
+                            {isConnected ? 'Realtime' : 'Sincronizando'}
                         </span>
                     </div>
                 </div>
@@ -186,7 +186,7 @@ const Patio: React.FC = () => {
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${statusFilter === s ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-900/40' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-650'}`}
+                                className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 ${statusFilter === s ? 'bg-blue-600 text-white border-blue-400 shadow-lg' : 'bg-gray-700 text-gray-400 border-gray-600 hover:bg-gray-650'}`}
                             >
                                 {s === 'todos' ? 'Ver Todos' : STATUS_CONFIG[s as VehicleStatus]?.label || s}
                             </button>
@@ -199,11 +199,11 @@ const Patio: React.FC = () => {
                 {loading && !vehicles.length ? (
                     <div className="flex flex-col items-center justify-center py-20 opacity-50">
                         <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="font-black text-xs uppercase tracking-widest text-white">Sincronizando Inventário...</p>
+                        <p className="font-black text-xs uppercase tracking-widest text-white">Atualizando Inventário...</p>
                     </div>
                 ) : filteredVehicles.length === 0 ? (
                     <div className="text-center py-32 border-4 border-dashed border-gray-800 rounded-[40px] opacity-30">
-                        <p className="text-white font-black uppercase text-sm">Nenhum veículo encontrado</p>
+                        <p className="text-white font-black uppercase text-sm">Nenhum registro encontrado</p>
                     </div>
                 ) : (
                     filteredVehicles.map(v => (

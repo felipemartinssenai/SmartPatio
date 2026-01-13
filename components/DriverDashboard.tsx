@@ -90,7 +90,8 @@ const DriverDashboard: React.FC = () => {
       const { data, error: fetchError } = await supabase
         .from('veiculos')
         .select('*')
-        .in('status', ['aguardando_coleta', 'em_transito']);
+        .in('status', ['aguardando_coleta', 'em_transito'])
+        .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
       
@@ -100,14 +101,18 @@ const DriverDashboard: React.FC = () => {
       if (initialLoadDone.current) {
         currentList.forEach(v => {
           if (v.status === 'aguardando_coleta' && !seenVehicleIds.current.has(v.id)) {
+            // Nova coleta detectada!
             sendNotification('NOVA COLETA DISPONÍVEL! 🚚', {
-              body: `Veículo Placa ${v.placa} disponível para retirada.`,
-              tag: v.id
+              body: `Veículo ${v.modelo || ''} Placa ${v.placa} disponível para retirada.`,
+              tag: v.id,
+              silent: false,
+              renotify: true
             });
             seenVehicleIds.current.add(v.id);
           }
         });
       } else {
+        // Na primeira carga, apenas memorizamos o que já existe
         currentList.forEach(v => seenVehicleIds.current.add(v.id));
         initialLoadDone.current = true;
       }
@@ -115,7 +120,7 @@ const DriverDashboard: React.FC = () => {
       setVehicles(currentList);
     } catch (err: any) {
       console.error('Erro de Sync:', err);
-      setError('Sincronizando...');
+      setError('Problema na conexão. Tentando reconectar...');
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -124,13 +129,15 @@ const DriverDashboard: React.FC = () => {
   useEffect(() => {
     syncData();
 
+    // Auto-refresh via Polling (Intervalo)
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     pollTimerRef.current = window.setInterval(() => {
       syncData(true);
     }, REFRESH_INTERVAL);
 
+    // Tempo Real via WebSockets (Realtime)
     const channel = supabase
-      .channel('driver_live_sync_final')
+      .channel('driver_live_sync_v2')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => {
           syncData(true);
       })
@@ -183,35 +190,39 @@ const DriverDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900" onClick={() => playChime()}>
+      {/* Cabeçalho Limpo: Sem título duplicado, apenas controles */}
       <header className="p-4 border-b border-gray-800 bg-gray-900/90 backdrop-blur-xl sticky top-0 z-10">
           <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
-                 <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 animate-pulse'}`}></div>
-                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{isConnected ? 'Em Tempo Real' : 'Conectando...'}</span>
+                 <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]' : 'bg-red-500 animate-pulse'}`}></div>
+                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                    {isConnected ? 'Escutando Novas Chamadas' : 'Reconectando Rádio...'}
+                 </span>
               </div>
               <button 
                   onClick={() => syncData(false)}
                   className="p-2 text-gray-400 hover:text-white transition-all active:scale-90"
-                  title="Atualizar agora"
               >
-                  <svg className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  <svg className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
               </button>
           </div>
           
           <div className="relative">
             <input 
                 type="text"
-                placeholder="🔍 Pesquisar por placa ou modelo..."
+                placeholder="🔍 Buscar placa ou modelo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-5 py-3 bg-gray-800 border-2 border-gray-700 rounded-xl text-white font-bold outline-none focus:border-blue-500 transition-all text-sm"
+                className="w-full px-5 py-3 bg-gray-800 border-2 border-gray-700 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all text-sm placeholder:text-gray-600"
             />
           </div>
       </header>
 
       <main className="flex-1 p-4 overflow-y-auto space-y-4">
         {error && (
-            <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl text-red-500 text-xs font-black text-center uppercase tracking-widest">
+            <div className="bg-red-500/10 border border-red-500/30 p-3 rounded-xl text-red-500 text-[10px] font-black text-center uppercase tracking-widest">
                 {error}
             </div>
         )}
@@ -223,12 +234,12 @@ const DriverDashboard: React.FC = () => {
             </div>
         ) : filteredVehicles.length === 0 ? (
             <div className="text-center py-32 opacity-20 flex flex-col items-center">
-                <span className="text-6xl mb-4">📭</span>
-                <p className="text-white font-black uppercase text-sm">Sem coletas pendentes</p>
+                <span className="text-6xl mb-4">🚛</span>
+                <p className="text-white font-black uppercase text-sm">Pátio Silencioso</p>
                 <p className="text-white text-[10px] mt-1 tracking-widest">Aguardando novos chamados no rádio...</p>
             </div>
         ) : (
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-4 pb-20">
                 {filteredVehicles.map((v) => (
                   <VehicleCard 
                       key={v.id} 
@@ -241,11 +252,15 @@ const DriverDashboard: React.FC = () => {
         )}
       </main>
       
-      <footer className="p-3 bg-gray-800/50 border-t border-gray-700 flex justify-between items-center safe-area-bottom">
+      <footer className="fixed bottom-0 left-0 right-0 p-3 bg-gray-900/80 backdrop-blur-md border-t border-gray-800 flex justify-between items-center z-20">
           <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-            Pooling: <span className="text-green-500">Ativo {REFRESH_INTERVAL/1000}s</span>
+            Monitoramento: <span className="text-green-500">Ativo</span>
           </p>
-          <button onClick={playChime} className="text-[9px] font-black text-blue-400 hover:text-white uppercase underline underline-offset-4">Testar Alerta</button>
+          <div className="flex items-center gap-4">
+            <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">
+                Refresh em: {REFRESH_INTERVAL/1000}s
+            </span>
+          </div>
       </footer>
     </div>
   );

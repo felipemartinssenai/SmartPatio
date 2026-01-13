@@ -5,6 +5,8 @@ import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 
+const REFRESH_INTERVAL = 10000; // 10 segundos
+
 const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Veiculo) => void; isTracking: boolean }> = ({ vehicle, onStartCollection, isTracking }) => {
   const getStatusChip = (status: Veiculo['status']) => {
     switch (status) {
@@ -63,8 +65,8 @@ const DriverDashboard: React.FC = () => {
   const [isConnected, setIsConnected] = useState(false);
   const intervalRef = useRef<number | null>(null);
 
-  const fetchInitialVehicles = useCallback(async () => {
-    setLoading(true);
+  const fetchInitialVehicles = useCallback(async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     const { data, error } = await supabase
       .from('veiculos')
       .select('*')
@@ -75,12 +77,13 @@ const DriverDashboard: React.FC = () => {
     } else {
       setVehicles(data as Veiculo[]);
     }
-    setLoading(false);
+    if (!isSilent) setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchInitialVehicles();
 
+    // Sincronização em tempo real
     const channel = supabase
       .channel('driver_realtime')
       .on(
@@ -111,8 +114,14 @@ const DriverDashboard: React.FC = () => {
           setIsConnected(status === 'SUBSCRIBED');
       });
 
+    // Auto-Refresh silencioso a cada 10 segundos
+    const pollInterval = setInterval(() => {
+        fetchInitialVehicles(true);
+    }, REFRESH_INTERVAL);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [fetchInitialVehicles, sendNotification]);
 
@@ -201,7 +210,7 @@ const DriverDashboard: React.FC = () => {
               </h2>
               <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-800/50 border border-gray-700">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">Live</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Live' : 'Polling'}</span>
               </div>
           </div>
           

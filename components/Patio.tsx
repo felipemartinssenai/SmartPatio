@@ -5,6 +5,8 @@ import { Veiculo, VehicleStatus, Movimentacao } from '../types';
 import CheckInModal from './CheckInModal';
 import CheckoutModal from './CheckoutModal';
 
+const REFRESH_INTERVAL = 10000; // 10 segundos
+
 const STATUS_CONFIG: Record<VehicleStatus, { label: string; bg: string; text: string; border: string }> = {
     'aguardando_coleta': { label: 'Aguardando Coleta', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
     'em_transito': { label: 'Em Trânsito', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
@@ -71,8 +73,8 @@ const Patio: React.FC = () => {
     const [vehicleForCheckIn, setVehicleForCheckIn] = useState<Veiculo | null>(null);
     const [vehicleForCheckout, setVehicleForCheckout] = useState<Veiculo | null>(null);
 
-    const fetchVehicles = useCallback(async () => {
-        setLoading(true);
+    const fetchVehicles = useCallback(async (isSilent = false) => {
+        if (!isSilent) setLoading(true);
         const { data, error } = await supabase
             .from('veiculos')
             .select('*')
@@ -84,19 +86,19 @@ const Patio: React.FC = () => {
         } else {
             setVehicles(data as Veiculo[]);
         }
-        setLoading(false);
+        if (!isSilent) setLoading(false);
     }, []);
 
     useEffect(() => {
         fetchVehicles();
 
+        // Configuração do Realtime
         const channel = supabase
             .channel('patio_realtime')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'veiculos' },
                 (payload) => {
-                    // Sincronização inteligente sem recarregar tudo do servidor se não necessário
                     if (payload.eventType === 'INSERT') {
                         const newVehicle = payload.new as Veiculo;
                         if (newVehicle.status !== 'finalizado') {
@@ -118,8 +120,14 @@ const Patio: React.FC = () => {
                 setIsConnected(status === 'SUBSCRIBED');
             });
 
+        // Configuração do Auto-Refresh (Polling) como fallback
+        const pollInterval = setInterval(() => {
+            fetchVehicles(true); // Chamada silenciosa sem loading spinner
+        }, REFRESH_INTERVAL);
+
         return () => {
             supabase.removeChannel(channel);
+            clearInterval(pollInterval);
         };
     }, [fetchVehicles]);
 
@@ -193,7 +201,7 @@ const Patio: React.FC = () => {
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-full shadow-sm">
                         <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                            {isConnected ? 'Sincronizado' : 'Reconectando...'}
+                            {isConnected ? 'Live' : 'Polling Activo'}
                         </span>
                     </div>
                 </div>

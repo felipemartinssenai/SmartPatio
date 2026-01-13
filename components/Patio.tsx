@@ -1,104 +1,136 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../services/supabase';
-import { Veiculo, Movimentacao } from '../types';
+import { Veiculo, VehicleStatus, Movimentacao } from '../types';
 import CheckInModal from './CheckInModal';
 import CheckoutModal from './CheckoutModal';
 
-const VehicleListItem: React.FC<{ 
+const STATUS_CONFIG: Record<VehicleStatus, { label: string; bg: string; text: string; border: string }> = {
+    'aguardando_coleta': { label: 'Aguardando Coleta', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
+    'em_transito': { label: 'Em Trânsito', bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500' },
+    'no_patio': { label: 'No Pátio', bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-indigo-500' },
+    'finalizado': { label: 'Finalizado', bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500' },
+};
+
+const VehicleRow: React.FC<{ 
     vehicle: Veiculo, 
-    statusColor: string, 
     onCheckIn?: (vehicle: Veiculo) => void,
     onCheckout?: (vehicle: Veiculo) => void,
-}> = ({ vehicle, statusColor, onCheckIn, onCheckout }) => (
-    <div className="bg-gray-800 p-4 rounded-lg shadow-md border-l-4 space-y-3" style={{ borderColor: statusColor }}>
-        <div className="flex justify-between items-start">
-            <div>
-                <p className="text-lg font-mono bg-white text-black rounded-md px-2 py-1 inline-block">{vehicle.placa}</p>
-                <p className="text-gray-300 mt-2">{vehicle.modelo || 'Modelo não informado'} - {vehicle.cor || 'Cor não informada'}</p>
+}> = ({ vehicle, onCheckIn, onCheckout }) => {
+    const config = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG['aguardando_coleta'];
+
+    return (
+        <div className={`bg-gray-800 p-4 rounded-xl shadow-lg border-l-4 ${config.border} flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-gray-750 animate-in fade-in slide-in-from-left-4 duration-300`}>
+            <div className="flex items-center gap-4">
+                <div className="flex flex-col">
+                    <span className="text-2xl font-mono font-bold bg-white text-black px-2 py-1 rounded-md self-start mb-1 shadow-sm">
+                        {vehicle.placa}
+                    </span>
+                    <span className="text-gray-300 font-medium">{vehicle.modelo || 'Sem Modelo'} <span className="text-gray-500 text-sm">• {vehicle.cor || 'Sem Cor'}</span></span>
+                </div>
             </div>
-            <p className="text-sm text-gray-400 flex-shrink-0 ml-2">{new Date(vehicle.created_at).toLocaleDateString('pt-BR')}</p>
+
+            <div className="flex flex-wrap items-center gap-3">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${config.bg} ${config.text}`}>
+                    {config.label}
+                </span>
+                
+                <div className="h-8 w-px bg-gray-700 hidden sm:block"></div>
+
+                <div className="flex-1 sm:flex-none">
+                    {(vehicle.status === 'aguardando_coleta' || vehicle.status === 'em_transito') && onCheckIn && (
+                        <button 
+                            onClick={() => onCheckIn(vehicle)}
+                            className="w-full sm:w-auto px-6 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white font-bold transition-all shadow-md active:scale-95"
+                        >
+                            Check-in
+                        </button>
+                    )}
+                    {vehicle.status === 'no_patio' && onCheckout && (
+                        <button 
+                            onClick={() => onCheckout(vehicle)}
+                            className="w-full sm:w-auto px-6 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-bold transition-all shadow-md active:scale-95"
+                        >
+                            Checkout
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
-        {onCheckIn && (
-            <button 
-                onClick={() => onCheckIn(vehicle)}
-                className="w-full mt-2 py-2 px-4 bg-green-600 hover:bg-green-700 rounded-lg text-white font-semibold transition-colors text-sm"
-            >
-                Realizar Check-in
-            </button>
-        )}
-        {onCheckout && (
-             <button 
-                onClick={() => onCheckout(vehicle)}
-                className="w-full mt-2 py-2 px-4 bg-red-600 hover:bg-red-700 rounded-lg text-white font-semibold transition-colors text-sm"
-            >
-                Realizar Checkout
-            </button>
-        )}
-    </div>
-);
+    );
+};
 
 const Patio: React.FC = () => {
-    const [aguardandoColeta, setAguardandoColeta] = useState<Veiculo[]>([]);
-    const [noPatio, setNoPatio] = useState<Veiculo[]>([]);
+    const [vehicles, setVehicles] = useState<Veiculo[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'todos'>('todos');
+    const [isConnected, setIsConnected] = useState(false);
+    
     const [vehicleForCheckIn, setVehicleForCheckIn] = useState<Veiculo | null>(null);
     const [vehicleForCheckout, setVehicleForCheckout] = useState<Veiculo | null>(null);
 
-    useEffect(() => {
-        const fetchInitialData = async () => {
-            setLoading(true);
-            const { data, error } = await supabase
-                .from('veiculos')
-                .select('*')
-                .in('status', ['aguardando_coleta', 'no_patio'])
-                .order('created_at', { ascending: false });
-            
-            if (error) {
-                setError('Falha ao carregar os dados do pátio.');
-            } else {
-                setAguardandoColeta(data.filter(v => v.status === 'aguardando_coleta'));
-                setNoPatio(data.filter(v => v.status === 'no_patio'));
-            }
-            setLoading(false);
-        };
+    const fetchVehicles = useCallback(async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('veiculos')
+            .select('*')
+            .neq('status', 'finalizado')
+            .order('created_at', { ascending: false });
+        
+        if (error) {
+            setError('Erro ao carregar dados do pátio.');
+        } else {
+            setVehicles(data as Veiculo[]);
+        }
+        setLoading(false);
+    }, []);
 
-        fetchInitialData();
+    useEffect(() => {
+        fetchVehicles();
 
         const channel = supabase
-            .channel('public:veiculos:patio')
-            .on<Veiculo>(
+            .channel('patio_realtime')
+            .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'veiculos' },
                 (payload) => {
-                    const { new: newVehicle, old: oldVehicle, eventType } = payload;
-                    
-                    const updateState = (setter: React.Dispatch<React.SetStateAction<Veiculo[]>>, vehicle: Veiculo, shouldAdd: boolean) => {
-                        setter(current => {
-                            const filtered = current.filter(v => v.id !== vehicle.id);
-                            if (shouldAdd) {
-                                return [vehicle, ...filtered].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-                            }
-                            return filtered;
-                        });
-                    };
-                    
-                    if (eventType === 'INSERT' || eventType === 'UPDATE') {
-                        updateState(setAguardandoColeta, newVehicle, newVehicle.status === 'aguardando_coleta');
-                        updateState(setNoPatio, newVehicle, newVehicle.status === 'no_patio');
-                    } else if (eventType === 'DELETE') {
-                         setAguardandoColeta(current => current.filter(v => v.id !== oldVehicle.id));
-                         setNoPatio(current => current.filter(v => v.id !== oldVehicle.id));
+                    // Sincronização inteligente sem recarregar tudo do servidor se não necessário
+                    if (payload.eventType === 'INSERT') {
+                        const newVehicle = payload.new as Veiculo;
+                        if (newVehicle.status !== 'finalizado') {
+                            setVehicles(prev => [newVehicle, ...prev]);
+                        }
+                    } else if (payload.eventType === 'UPDATE') {
+                        const updatedVehicle = payload.new as Veiculo;
+                        if (updatedVehicle.status === 'finalizado') {
+                            setVehicles(prev => prev.filter(v => v.id !== updatedVehicle.id));
+                        } else {
+                            setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
+                        }
+                    } else if (payload.eventType === 'DELETE') {
+                        setVehicles(prev => prev.filter(v => v.id !== payload.old.id));
                     }
                 }
-            ).subscribe();
+            )
+            .subscribe((status) => {
+                setIsConnected(status === 'SUBSCRIBED');
+            });
 
         return () => {
             supabase.removeChannel(channel);
         };
+    }, [fetchVehicles]);
 
-    }, []);
+    const filteredVehicles = useMemo(() => {
+        return vehicles.filter(v => {
+            const matchesSearch = v.placa.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                 v.modelo?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === 'todos' || v.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        });
+    }, [vehicles, searchTerm, statusFilter]);
 
     const handleConfirmCheckIn = async (vehicleId: string, valorDiaria: number) => {
         const { error: movError } = await supabase
@@ -109,55 +141,119 @@ const Patio: React.FC = () => {
                 data_entrada: new Date().toISOString()
             });
 
-        if (movError) throw new Error('Falha ao criar o registro de movimentação.');
+        if (movError) throw movError;
 
         const { error: vecError } = await supabase
             .from('veiculos')
             .update({ status: 'no_patio' })
             .eq('id', vehicleId);
         
-        if (vecError) throw new Error('Falha ao atualizar o status do veículo.');
+        if (vecError) throw vecError;
+        
+        setVehicleForCheckIn(null);
     };
 
     const handleConfirmCheckout = async (movimentacao: Movimentacao, totalPago: number) => {
         const dataSaida = new Date().toISOString();
 
-        // 1. Update movimentacao
         const { error: movError } = await supabase
             .from('movimentacoes')
-            .update({ data_saida: dataSaida, total_pago: totalPago, forma_pagamento: 'Confirmado no Sistema' })
+            .update({ data_saida: dataSaida, total_pago: totalPago, forma_pagamento: 'Checkout Pátio' })
             .eq('id', movimentacao.id);
 
-        if(movError) throw new Error('Falha ao atualizar a movimentação.');
+        if(movError) throw movError;
 
-        // 2. Create financial record
         const { error: finError } = await supabase
             .from('financeiro')
             .insert({
                 tipo: 'entrada',
                 valor: totalPago,
-                descricao: `Recebimento diárias - Veículo Placa ${vehicleForCheckout?.placa}`,
+                descricao: `Checkout Pátio - Placa ${vehicleForCheckout?.placa}`,
                 movimentacao_id: movimentacao.id,
                 data: dataSaida,
             });
 
-        if(finError) throw new Error('Falha ao criar registro financeiro.');
+        if(finError) throw finError;
 
-        // 3. Update vehicle status
         const { error: vecError } = await supabase
             .from('veiculos')
             .update({ status: 'finalizado' })
             .eq('id', movimentacao.veiculo_id);
         
-        if(vecError) throw new Error('Falha ao finalizar o veículo.');
+        if(vecError) throw vecError;
+
+        setVehicleForCheckout(null);
     };
 
-
-    if (loading) return <div className="text-center p-8">Carregando dados do pátio...</div>
-    if (error) return <div className="text-center p-8 text-red-400">{error}</div>
-
     return (
-        <>
+        <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900">
+            <header className="mb-8">
+                <div className="flex items-center justify-between mb-6">
+                    <h1 className="text-3xl font-bold text-white">Gerenciamento do Pátio</h1>
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-full shadow-sm">
+                        <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                            {isConnected ? 'Sincronizado' : 'Reconectando...'}
+                        </span>
+                    </div>
+                </div>
+                
+                <div className="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 relative">
+                        <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por placa ou modelo..." 
+                            className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    
+                    <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+                        {(['todos', 'aguardando_coleta', 'em_transito', 'no_patio'] as const).map(s => (
+                            <button
+                                key={s}
+                                onClick={() => setStatusFilter(s)}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+                                    statusFilter === s 
+                                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-800' 
+                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                }`}
+                            >
+                                {s === 'todos' ? 'Todos' : STATUS_CONFIG[s as VehicleStatus].label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </header>
+
+            <main className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                {loading && (
+                    <div className="flex flex-col items-center justify-center py-20">
+                        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-gray-400">Carregando inventário...</p>
+                    </div>
+                )}
+
+                {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-lg text-center border border-red-500/50">{error}</div>}
+
+                {!loading && filteredVehicles.length === 0 && (
+                    <div className="text-center py-20 bg-gray-800/30 rounded-xl border border-dashed border-gray-700">
+                        <p className="text-gray-500 text-lg">Nenhum veículo encontrado para os filtros ativos.</p>
+                    </div>
+                )}
+
+                {filteredVehicles.map(v => (
+                    <VehicleRow 
+                        key={v.id} 
+                        vehicle={v} 
+                        onCheckIn={setVehicleForCheckIn}
+                        onCheckout={setVehicleForCheckout}
+                    />
+                ))}
+            </main>
+
             <CheckInModal 
                 vehicle={vehicleForCheckIn}
                 onClose={() => setVehicleForCheckIn(null)}
@@ -168,47 +264,7 @@ const Patio: React.FC = () => {
                 onClose={() => setVehicleForCheckout(null)}
                 onConfirm={handleConfirmCheckout}
             />
-            <div className="p-4 sm:p-8 h-full">
-                <h1 className="text-3xl font-bold text-white mb-6">Gerenciamento do Pátio</h1>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Coluna Aguardando Coleta */}
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                        <h2 className="text-xl font-semibold text-yellow-400 mb-4">Aguardando Coleta ({aguardandoColeta.length})</h2>
-                        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
-                            {aguardandoColeta.length > 0 ? (
-                                aguardandoColeta.map(v => 
-                                    <VehicleListItem 
-                                        key={v.id} 
-                                        vehicle={v} 
-                                        statusColor="#FBBF24" 
-                                        onCheckIn={setVehicleForCheckIn}
-                                    />)
-                            ) : (
-                                <p className="text-gray-500">Nenhum veículo aguardando coleta.</p>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Coluna No Pátio */}
-                    <div className="bg-gray-800/50 rounded-lg p-4">
-                        <h2 className="text-xl font-semibold text-indigo-400 mb-4">Veículos no Pátio ({noPatio.length})</h2>
-                        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
-                             {noPatio.length > 0 ? (
-                                noPatio.map(v => 
-                                    <VehicleListItem 
-                                        key={v.id} 
-                                        vehicle={v} 
-                                        statusColor="#818CF8" 
-                                        onCheckout={setVehicleForCheckout}
-                                    />)
-                            ) : (
-                                <p className="text-gray-500">Nenhum veículo no pátio.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </>
+        </div>
     );
 };
 

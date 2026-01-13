@@ -133,12 +133,12 @@ const FechamentoDetalheModal: React.FC<FechamentoDetalheModalProps> = ({ movimen
             };
 
             // Update financial record if total_pago changed
-            if (details.total_pago !== movimentacaoId) { // This comparison is not right, but we can assume it changed
-                 await supabase
-                    .from('financeiro')
-                    .update({ valor: details.total_pago })
-                    .eq('movimentacao_id', details.movimentacao_id);
-            }
+            // FIX: Removed the incorrect comparison (details.total_pago !== movimentacaoId).
+            // We'll update the financial record to match the new total_pago value whenever saving.
+            await supabase
+                .from('financeiro')
+                .update({ valor: details.total_pago })
+                .eq('movimentacao_id', details.movimentacao_id);
 
             const [vehicleResult, movementResult] = await Promise.all([
                 supabase.from('veiculos').update(vehicleUpdate).eq('id', details.veiculo_id),

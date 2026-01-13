@@ -6,7 +6,6 @@ import DriverDashboard from './components/DriverDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import Layout from './components/Layout';
 import Financials from './components/Financials';
-import CheckIn from './components/CheckIn';
 import SolicitacaoColeta from './components/SolicitacaoColeta';
 import Patio from './components/Patio';
 import Fechamentos from './components/Fechamentos';
@@ -18,7 +17,6 @@ const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
 
   useEffect(() => {
-    // Set the initial page based on user role
     if (profile) {
       if (profile.cargo === 'motorista') {
         setCurrentPage('collections');
@@ -28,16 +26,49 @@ const App: React.FC = () => {
     }
   }, [profile]);
 
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-900">
-        <div className="text-white text-2xl">Carregando...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-white text-xl font-medium">Sincronizando...</div>
+        </div>
       </div>
     );
   }
 
-  if (!session || !profile) {
+  // Caso: Logado mas sem perfil (erro de banco de dados)
+  if (session && !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4 text-center">
+        <div className="bg-gray-800 p-8 rounded-xl shadow-2xl max-w-md border border-red-500/30">
+          <h2 className="text-2xl font-bold text-red-400 mb-4">Perfil não encontrado</h2>
+          <p className="text-gray-300 mb-6">
+            Você está logado como <strong>{session.user.email}</strong>, mas sua conta ainda não foi inicializada no sistema.
+          </p>
+          <div className="flex flex-col gap-3">
+             <button 
+              onClick={() => window.location.reload()} 
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold"
+            >
+              Tentar Novamente
+            </button>
+            <button 
+              onClick={signOut} 
+              className="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium"
+            >
+              Sair e usar outra conta
+            </button>
+          </div>
+          <p className="mt-6 text-xs text-gray-500">
+            Se o erro persistir, o administrador deve verificar o script de Setup do Banco.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
     return <AuthComponent />;
   }
 
@@ -47,8 +78,6 @@ const App: React.FC = () => {
         return <AdminDashboard />;
       case 'collections':
         return <DriverDashboard />;
-      case 'checkin':
-        return <CheckIn />;
       case 'financials':
         return <Financials />;
        case 'fechamentos':
@@ -64,7 +93,7 @@ const App: React.FC = () => {
 
   return (
     <Layout
-      profile={profile}
+      profile={profile!}
       signOut={signOut}
       currentPage={currentPage}
       setCurrentPage={setCurrentPage}

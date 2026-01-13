@@ -5,7 +5,7 @@ import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 
-const REFRESH_INTERVAL = 10000; // 10 segundos
+const REFRESH_INTERVAL = 10000;
 
 const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Veiculo) => void; isTracking: boolean }> = ({ vehicle, onStartCollection, isTracking }) => {
   const getStatusChip = (status: Veiculo['status']) => {
@@ -56,7 +56,7 @@ const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Vei
 
 const DriverDashboard: React.FC = () => {
   const { user } = useAuth();
-  const { sendNotification } = useNotifications();
+  const { sendNotification, requestPermission, permission } = useNotifications();
   const [vehicles, setVehicles] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,9 +81,13 @@ const DriverDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // Solicita permissão de notificação assim que o motorista abre o dashboard
+    if (permission === 'default') {
+      requestPermission();
+    }
+
     fetchInitialVehicles();
 
-    // Sincronização em tempo real
     const channel = supabase
       .channel('driver_realtime')
       .on(
@@ -94,8 +98,12 @@ const DriverDashboard: React.FC = () => {
             const newVehicle = payload.new as Veiculo;
             if (newVehicle.status === 'aguardando_coleta') {
               setVehicles((current) => [newVehicle, ...current]);
-              sendNotification('Nova Coleta Disponível!', {
-                body: `Veículo placa ${newVehicle.placa} aguardando coleta.`,
+              
+              // Notificação Nativa do Sistema (Push-like)
+              sendNotification('Nova Coleta Disponível! 🚚', {
+                body: `Veículo ${newVehicle.modelo || ''} (Placa: ${newVehicle.placa}) aguarda retirada. Clique para ver detalhes.`,
+                tag: 'nova-coleta',
+                renotify: true
               });
             }
           } else if (payload.eventType === 'UPDATE') {
@@ -105,8 +113,6 @@ const DriverDashboard: React.FC = () => {
             } else {
                 setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
             }
-          } else if (payload.eventType === 'DELETE') {
-            setVehicles(prev => prev.filter(v => v.id !== payload.old.id));
           }
         }
       )
@@ -114,7 +120,6 @@ const DriverDashboard: React.FC = () => {
           setIsConnected(status === 'SUBSCRIBED');
       });
 
-    // Auto-Refresh silencioso a cada 10 segundos
     const pollInterval = setInterval(() => {
         fetchInitialVehicles(true);
     }, REFRESH_INTERVAL);
@@ -123,9 +128,8 @@ const DriverDashboard: React.FC = () => {
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
-  }, [fetchInitialVehicles, sendNotification]);
+  }, [fetchInitialVehicles, sendNotification, permission, requestPermission]);
 
-  // Filtragem da lista em memória para performance
   const filteredVehicles = useMemo(() => {
     if (!searchTerm.trim()) return vehicles;
     const term = searchTerm.toLowerCase().trim();
@@ -135,41 +139,9 @@ const DriverDashboard: React.FC = () => {
     );
   }, [vehicles, searchTerm]);
   
-  useEffect(() => {
-    const trackedVehicle = vehicles.find(v => v.id === trackingVehicleId);
-    if (trackedVehicle && trackedVehicle.status !== 'em_transito') {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      setTrackingVehicleId(null);
-      sendNotification('Coleta Recebida no Pátio', { body: `A coleta do veículo ${trackedVehicle.placa} foi confirmada pelo pátio.` });
-    }
-  }, [vehicles, trackingVehicleId, sendNotification]);
-
-
-  const updateLocation = (vehicleId: string) => {
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        await supabase
-          .from('veiculos')
-          .update({ lat: latitude, lng: longitude })
-          .eq('id', vehicleId);
-      },
-      (err) => {
-        console.error('Erro de geolocalização:', err);
-        setError(`Erro de GPS: ${err.message}`);
-      },
-      { enableHighAccuracy: true }
-    );
-  };
-  
   const startTracking = async (vehicle: Veiculo) => {
     if (!user) return;
-    if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-    }
+    if (intervalRef.current) clearInterval(intervalRef.current);
 
     const { error } = await supabase
         .from('veiculos')
@@ -177,93 +149,63 @@ const DriverDashboard: React.FC = () => {
         .eq('id', vehicle.id);
     
     if(error) {
-        setError('Não foi possível iniciar a coleta. Tente novamente.');
+        setError('Não foi possível iniciar a coleta.');
         return;
     }
 
-    // DISPARO IMEDIATO DO REFRESH APÓS AÇÃO
     fetchInitialVehicles(true);
-    
     setTrackingVehicleId(vehicle.id);
 
     if(vehicle.lat && vehicle.lng){
         window.open(`https://www.google.com/maps?daddr=${vehicle.lat},${vehicle.lng}`, '_blank');
     }
     
-    updateLocation(vehicle.id);
-    intervalRef.current = window.setInterval(() => {
-        updateLocation(vehicle.id);
-    }, 15000);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+    const updateLoc = () => {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          await supabase.from('veiculos').update({ lat: pos.coords.latitude, lng: pos.coords.longitude }).eq('id', vehicle.id);
+        },
+        null,
+        { enableHighAccuracy: true }
+      );
     };
-  }, []);
+
+    updateLoc();
+    intervalRef.current = window.setInterval(updateLoc, 15000);
+  };
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
       <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 space-y-4">
           <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                Minhas Coletas
-              </h2>
+              <h2 className="text-xl font-bold text-white">Minhas Coletas</h2>
               <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-800/50 border border-gray-700">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Live' : 'Polling'}</span>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">{isConnected ? 'Sincronizado' : 'Offline'}</span>
               </div>
           </div>
           
           <div className="relative">
-              <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-              </svg>
               <input 
                   type="text"
-                  placeholder="Filtrar por placa ou modelo..."
+                  placeholder="Buscar veículo..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+                  className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm"
               />
-              {searchTerm && (
-                  <button 
-                      onClick={() => setSearchTerm('')}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-                  >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                  </button>
-              )}
           </div>
       </header>
 
       <main className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar">
-        {loading && (
-            <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-sm text-gray-500">Buscando atualizações...</p>
-            </div>
-        )}
-        
-        {error && <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-sm border border-red-500/20 text-center">{error}</div>}
-        
-        {!loading && filteredVehicles.length === 0 && (
-          <div className="text-center py-20 px-6">
-              <div className="bg-gray-800/50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-700">
-                  <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-              </div>
-              <h3 className="text-gray-300 font-bold mb-1">
-                  {searchTerm ? 'Nenhum veículo encontrado' : 'Nenhuma coleta disponível'}
-              </h3>
-              <p className="text-gray-500 text-sm">
-                  {searchTerm ? 'Tente buscar por outra placa.' : 'Fique atento! Novas solicitações aparecerão aqui em tempo real.'}
-              </p>
+        {permission === 'denied' && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg text-yellow-500 text-xs mb-4">
+            Atenção: Notificações desativadas. Você não será alertado sobre novas coletas.
           </div>
         )}
 
-        {filteredVehicles.map((v) => (
+        {loading && <div className="text-center py-10 text-gray-500">Buscando coletas...</div>}
+        
+        {!loading && filteredVehicles.map((v) => (
           <VehicleCard key={v.id} vehicle={v} onStartCollection={startTracking} isTracking={trackingVehicleId === v.id}/>
         ))}
       </main>

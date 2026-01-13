@@ -10,13 +10,18 @@ export function useNotifications() {
       setPermission(Notification.permission);
     }
     
-    // Tenta inicializar o AudioContext silenciosamente no primeiro toque
+    // Tenta inicializar o AudioContext silenciosamente no primeiro toque do usuário
     const initAudio = () => {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
+      try {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume();
+        }
+        console.log("AudioContext desbloqueado com sucesso.");
+      } catch (e) {
+        console.error("Falha ao iniciar AudioContext:", e);
       }
     };
 
@@ -32,7 +37,7 @@ export function useNotifications() {
   const playChime = useCallback(() => {
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 44100 });
       }
       const ctx = audioContextRef.current;
       
@@ -40,58 +45,69 @@ export function useNotifications() {
         ctx.resume();
       }
 
-      // Som estilo Alerta (Bip duplo)
-      const playBip = (startTime: number, freq: number) => {
+      // Som estilo Sirene/Alerta (Mais audível no celular)
+      const playTone = (startTime: number, freq: number, duration: number) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = 'square'; // Som mais 'cortante' para notificações
+          osc.type = 'triangle'; 
           osc.frequency.setValueAtTime(freq, startTime);
-          gain.gain.setValueAtTime(0.3, startTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+          osc.frequency.exponentialRampToValueAtTime(freq * 1.5, startTime + duration);
+          
+          gain.gain.setValueAtTime(0, startTime);
+          gain.gain.linearRampToValueAtTime(0.5, startTime + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+          
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.start(startTime);
-          osc.stop(startTime + 0.2);
+          osc.stop(startTime + duration);
       };
 
-      playBip(ctx.currentTime, 880);
-      playBip(ctx.currentTime + 0.3, 1100);
+      const now = ctx.currentTime;
+      playTone(now, 880, 0.4);
+      playTone(now + 0.5, 880, 0.4);
 
     } catch (e) {
-      console.error("Erro AudioContext:", e);
+      console.error("Erro ao reproduzir som:", e);
     }
   }, []);
 
   const requestPermission = useCallback(async () => {
-    if (!('Notification' in window)) return 'default';
+    if (!('Notification' in window)) {
+        console.warn("Este navegador não suporta notificações.");
+        return 'denied';
+    }
     const status = await Notification.requestPermission();
     setPermission(status);
-    if (status === 'granted') playChime();
+    if (status === 'granted') {
+        playChime();
+        // Dispara uma notificação de teste para confirmar
+        new Notification("PátioLog Ativo", { body: "Você receberá alertas de novas coletas aqui.", icon: 'https://img.icons8.com/plasticine/100/000000/tow-truck.png' });
+    }
     return status;
   }, [playChime]);
 
   const sendNotification = useCallback((title: string, options?: NotificationOptions) => {
-    // Toca o som localmente
+    // Toca o som localmente sempre
     playChime();
 
     // Dispara a notificação de sistema se houver permissão
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
-        const notification = new Notification(title, {
+        const n = new Notification(title, {
             body: options?.body,
             icon: 'https://img.icons8.com/plasticine/100/000000/tow-truck.png',
             badge: 'https://img.icons8.com/plasticine/100/000000/tow-truck.png',
-            // Vibração padrão: [espera, vibra, espera, vibra...]
-            vibrate: [200, 100, 200, 100, 200, 100, 400],
+            vibrate: [500, 110, 500, 110, 450, 110, 200, 110, 170, 40, 450, 110, 200, 110, 170, 40, 500],
             requireInteraction: true,
-            tag: options?.tag || 'patiolog-alert',
+            tag: options?.tag || 'patiolog-new-collection',
             renotify: true,
             ...options,
         } as any);
 
-        notification.onclick = () => {
+        n.onclick = () => {
           window.focus();
-          notification.close();
+          n.close();
         };
       } catch (e) {
         console.warn('Erro ao disparar notificação visual:', e);

@@ -63,7 +63,7 @@ const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Vei
       {vehicle.status === 'em_transito' && (isTracking || vehicle.motorista_id) && (
         <div className="w-full py-4 bg-blue-900/20 border border-blue-500/30 rounded-xl text-blue-400 font-black text-center flex items-center justify-center gap-3">
            <div className="animate-pulse w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
-           EM ANDAMENTO
+           COLETA EM ANDAMENTO
         </div>
       )}
     </div>
@@ -96,12 +96,12 @@ const DriverDashboard: React.FC = () => {
       
       const currentList = (data as Veiculo[]) || [];
       
-      // Lógica de Notificação de Novas Coletas (Apenas após o primeiro load)
+      // Lógica de Notificação de Novas Coletas
       if (initialLoadDone.current) {
         currentList.forEach(v => {
           if (v.status === 'aguardando_coleta' && !seenVehicleIds.current.has(v.id)) {
-            sendNotification('NOVA COLETA! 🚚', {
-              body: `Veículo Placa ${v.placa} disponível agora para retirada.`,
+            sendNotification('NOVA COLETA DISPONÍVEL! 🚚', {
+              body: `Veículo Placa ${v.placa} disponível para retirada.`,
               tag: v.id
             });
             seenVehicleIds.current.add(v.id);
@@ -115,7 +115,7 @@ const DriverDashboard: React.FC = () => {
       setVehicles(currentList);
     } catch (err: any) {
       console.error('Erro de Sync:', err);
-      setError('Sincronizando dados...');
+      setError('Sincronizando...');
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -130,7 +130,7 @@ const DriverDashboard: React.FC = () => {
     }, REFRESH_INTERVAL);
 
     const channel = supabase
-      .channel('driver_live_sync_v2')
+      .channel('driver_live_sync_final')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => {
           syncData(true);
       })
@@ -167,13 +167,14 @@ const DriverDashboard: React.FC = () => {
       
       if(updateError) throw updateError;
 
+      // Abre GPS se houver coordenadas
       if (vehicle.lat && vehicle.lng) {
           window.open(`https://www.google.com/maps/dir/?api=1&destination=${vehicle.lat},${vehicle.lng}`, '_blank');
       }
 
       await syncData(true);
     } catch (err: any) {
-      setError('Não foi possível pegar esta coleta.');
+      setError('Esta coleta já foi retirada ou houve um erro.');
       await syncData(false);
     } finally {
       setLoading(false);
@@ -186,11 +187,12 @@ const DriverDashboard: React.FC = () => {
           <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 animate-pulse'}`}></div>
-                 <h2 className="text-xl font-black text-white uppercase tracking-tight">Minhas Coletas</h2>
+                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{isConnected ? 'Em Tempo Real' : 'Conectando...'}</span>
               </div>
               <button 
                   onClick={() => syncData(false)}
                   className="p-2 text-gray-400 hover:text-white transition-all active:scale-90"
+                  title="Atualizar agora"
               >
                   <svg className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
               </button>
@@ -199,7 +201,7 @@ const DriverDashboard: React.FC = () => {
           <div className="relative">
             <input 
                 type="text"
-                placeholder="Filtrar por placa ou modelo..."
+                placeholder="🔍 Pesquisar por placa ou modelo..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full px-5 py-3 bg-gray-800 border-2 border-gray-700 rounded-xl text-white font-bold outline-none focus:border-blue-500 transition-all text-sm"
@@ -217,13 +219,13 @@ const DriverDashboard: React.FC = () => {
         {loading && vehicles.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 opacity-40">
                 <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                <p className="font-black text-[10px] uppercase tracking-widest">Sincronizando...</p>
+                <p className="font-black text-[10px] uppercase tracking-widest text-white">Sincronizando Pátio...</p>
             </div>
         ) : filteredVehicles.length === 0 ? (
             <div className="text-center py-32 opacity-20 flex flex-col items-center">
-                <span className="text-6xl mb-4">📦</span>
-                <p className="text-white font-black uppercase text-sm">Sem coletas no momento</p>
-                <p className="text-white text-[10px] mt-1 tracking-widest">Aguardando novos chamados...</p>
+                <span className="text-6xl mb-4">📭</span>
+                <p className="text-white font-black uppercase text-sm">Sem coletas pendentes</p>
+                <p className="text-white text-[10px] mt-1 tracking-widest">Aguardando novos chamados no rádio...</p>
             </div>
         ) : (
             <div className="grid grid-cols-1 gap-4">
@@ -241,9 +243,9 @@ const DriverDashboard: React.FC = () => {
       
       <footer className="p-3 bg-gray-800/50 border-t border-gray-700 flex justify-between items-center safe-area-bottom">
           <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-            Pooling: <span className="text-green-500">{isConnected ? 'Ativo 9s' : 'Off'}</span>
+            Pooling: <span className="text-green-500">Ativo {REFRESH_INTERVAL/1000}s</span>
           </p>
-          <button onClick={playChime} className="text-[9px] font-black text-blue-400 hover:text-white uppercase underline underline-offset-4">Testar Som</button>
+          <button onClick={playChime} className="text-[9px] font-black text-blue-400 hover:text-white uppercase underline underline-offset-4">Testar Alerta</button>
       </footer>
     </div>
   );

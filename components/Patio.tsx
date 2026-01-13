@@ -93,7 +93,7 @@ const Patio: React.FC = () => {
         fetchVehicles();
 
         const channel = supabase
-            .channel('patio_live_sync_v2')
+            .channel('patio_live_sync_final')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => fetchVehicles(true))
             .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
@@ -160,11 +160,11 @@ const Patio: React.FC = () => {
         <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900 overflow-hidden">
             <header className="mb-6 flex-shrink-0">
                 <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-extrabold text-white tracking-tight">Gestão do Pátio</h1>
+                    <h1 className="text-2xl font-bold text-white">Gestão do Pátio</h1>
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-2 border-gray-700 rounded-2xl shadow-xl">
                         <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            {isConnected ? 'Realtime' : 'Sincronizando'}
+                            {isConnected ? 'Em Tempo Real' : 'Sincronizando'}
                         </span>
                     </div>
                 </div>
@@ -173,7 +173,7 @@ const Patio: React.FC = () => {
                     <div className="relative">
                         <input 
                             type="text" 
-                            placeholder="Pesquisar por placa ou modelo..." 
+                            placeholder="Pesquisar placa ou modelo..." 
                             className="w-full pl-12 pr-4 py-3 bg-gray-900 border-2 border-gray-700 rounded-2xl text-white font-bold outline-none focus:border-blue-500 transition-all shadow-inner"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -199,7 +199,7 @@ const Patio: React.FC = () => {
                 {loading && !vehicles.length ? (
                     <div className="flex flex-col items-center justify-center py-20 opacity-50">
                         <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="font-black text-xs uppercase tracking-widest text-white">Atualizando Inventário...</p>
+                        <p className="font-black text-xs uppercase tracking-widest text-white">Sincronizando Inventário...</p>
                     </div>
                 ) : filteredVehicles.length === 0 ? (
                     <div className="text-center py-32 border-4 border-dashed border-gray-800 rounded-[40px] opacity-30">

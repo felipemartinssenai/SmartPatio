@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
@@ -58,6 +58,7 @@ const DriverDashboard: React.FC = () => {
   const [vehicles, setVehicles] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [trackingVehicleId, setTrackingVehicleId] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const intervalRef = useRef<number | null>(null);
@@ -96,7 +97,6 @@ const DriverDashboard: React.FC = () => {
             }
           } else if (payload.eventType === 'UPDATE') {
             const updatedVehicle = payload.new as Veiculo;
-            // Se o status mudou para algo que não interessa ao motorista (ex: no_patio), removemos da lista
             if (!['aguardando_coleta', 'em_transito'].includes(updatedVehicle.status)) {
                 setVehicles(prev => prev.filter(v => v.id !== updatedVehicle.id));
             } else {
@@ -115,6 +115,16 @@ const DriverDashboard: React.FC = () => {
       supabase.removeChannel(channel);
     };
   }, [fetchInitialVehicles, sendNotification]);
+
+  // Filtragem da lista em memória para performance
+  const filteredVehicles = useMemo(() => {
+    if (!searchTerm.trim()) return vehicles;
+    const term = searchTerm.toLowerCase().trim();
+    return vehicles.filter(v => 
+      v.placa.toLowerCase().includes(term) || 
+      (v.modelo && v.modelo.toLowerCase().includes(term))
+    );
+  }, [vehicles, searchTerm]);
   
   useEffect(() => {
     const trackedVehicle = vehicles.find(v => v.id === trackingVehicleId);
@@ -164,7 +174,6 @@ const DriverDashboard: React.FC = () => {
 
     setTrackingVehicleId(vehicle.id);
 
-    // Abrir Google Maps se houver coordenadas iniciais (origem do veículo)
     if(vehicle.lat && vehicle.lng){
         window.open(`https://www.google.com/maps?daddr=${vehicle.lat},${vehicle.lng}`, '_blank');
     }
@@ -172,7 +181,7 @@ const DriverDashboard: React.FC = () => {
     updateLocation(vehicle.id);
     intervalRef.current = window.setInterval(() => {
         updateLocation(vehicle.id);
-    }, 15000); // Atualiza GPS a cada 15 segundos durante a rota
+    }, 15000);
   };
 
   useEffect(() => {
@@ -185,13 +194,36 @@ const DriverDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900">
-      <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            Minhas Coletas
-          </h2>
-          <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-800/50 border border-gray-700">
-            <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase">Live</span>
+      <header className="p-4 border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-10 space-y-4">
+          <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                Minhas Coletas
+              </h2>
+              <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gray-800/50 border border-gray-700">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+                <span className="text-[10px] font-bold text-gray-500 uppercase">Live</span>
+              </div>
+          </div>
+          
+          <div className="relative">
+              <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+              <input 
+                  type="text"
+                  placeholder="Filtrar por placa ou modelo..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
+              />
+              {searchTerm && (
+                  <button 
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                  >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+              )}
           </div>
       </header>
 
@@ -205,17 +237,21 @@ const DriverDashboard: React.FC = () => {
         
         {error && <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-sm border border-red-500/20 text-center">{error}</div>}
         
-        {vehicles.length === 0 && !loading && (
+        {!loading && filteredVehicles.length === 0 && (
           <div className="text-center py-20 px-6">
               <div className="bg-gray-800/50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-gray-700">
                   <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
               </div>
-              <h3 className="text-gray-300 font-bold mb-1">Nenhuma coleta disponível</h3>
-              <p className="text-gray-500 text-sm">Fique atento! Novas solicitações aparecerão aqui em tempo real.</p>
+              <h3 className="text-gray-300 font-bold mb-1">
+                  {searchTerm ? 'Nenhum veículo encontrado' : 'Nenhuma coleta disponível'}
+              </h3>
+              <p className="text-gray-500 text-sm">
+                  {searchTerm ? 'Tente buscar por outra placa.' : 'Fique atento! Novas solicitações aparecerão aqui em tempo real.'}
+              </p>
           </div>
         )}
 
-        {vehicles.map((v) => (
+        {filteredVehicles.map((v) => (
           <VehicleCard key={v.id} vehicle={v} onStartCollection={startTracking} isTracking={trackingVehicleId === v.id}/>
         ))}
       </main>

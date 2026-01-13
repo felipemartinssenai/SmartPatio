@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase';
 import { Veiculo, VehicleStatus, Movimentacao } from '../types';
 import CheckInModal from './CheckInModal';
 import CheckoutModal from './CheckoutModal';
+import VehicleEditModal from './VehicleEditModal';
 
 const REFRESH_INTERVAL = 9000;
 
@@ -18,11 +19,15 @@ const VehicleRow: React.FC<{
     vehicle: Veiculo, 
     onCheckIn?: (vehicle: Veiculo) => void,
     onCheckout?: (vehicle: Veiculo) => void,
-}> = ({ vehicle, onCheckIn, onCheckout }) => {
+    onViewEdit?: (vehicle: Veiculo) => void,
+}> = ({ vehicle, onCheckIn, onCheckout, onViewEdit }) => {
     const config = STATUS_CONFIG[vehicle.status] || STATUS_CONFIG['aguardando_coleta'];
 
     return (
-        <div className={`bg-gray-800 p-4 rounded-2xl shadow-lg border-l-8 ${config.border} flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-gray-750 duration-300`}>
+        <div 
+            onClick={() => onViewEdit?.(vehicle)}
+            className={`bg-gray-800 p-4 rounded-2xl shadow-lg border-l-8 ${config.border} flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-gray-750 hover:scale-[1.01] cursor-pointer duration-300`}
+        >
             <div className="flex items-center gap-4">
                 <div className="flex flex-col">
                     <span className="text-2xl font-mono font-black bg-white text-black px-3 py-1 rounded-lg self-start mb-1 shadow-inner">
@@ -34,7 +39,7 @@ const VehicleRow: React.FC<{
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3" onClick={e => e.stopPropagation()}>
                 <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${config.bg} ${config.text} ${config.border.replace('border-', 'border-opacity-30 border-')}`}>
                     {config.label}
                 </span>
@@ -44,7 +49,7 @@ const VehicleRow: React.FC<{
                 <div className="flex-1 sm:flex-none">
                     {(vehicle.status === 'aguardando_coleta' || vehicle.status === 'em_transito') && onCheckIn && (
                         <button 
-                            onClick={() => onCheckIn(vehicle)}
+                            onClick={(e) => { e.stopPropagation(); onCheckIn(vehicle); }}
                             className="w-full sm:w-auto px-8 py-2.5 bg-green-600 hover:bg-green-500 rounded-xl text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
                         >
                             Check-in
@@ -52,7 +57,7 @@ const VehicleRow: React.FC<{
                     )}
                     {vehicle.status === 'no_patio' && onCheckout && (
                         <button 
-                            onClick={() => onCheckout(vehicle)}
+                            onClick={(e) => { e.stopPropagation(); onCheckout(vehicle); }}
                             className="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-700 rounded-xl text-white font-black uppercase text-xs tracking-widest transition-all shadow-lg active:scale-95"
                         >
                             Checkout
@@ -74,6 +79,7 @@ const Patio: React.FC = () => {
     
     const [vehicleForCheckIn, setVehicleForCheckIn] = useState<Veiculo | null>(null);
     const [vehicleForCheckout, setVehicleForCheckout] = useState<Veiculo | null>(null);
+    const [vehicleForEdit, setVehicleForEdit] = useState<Veiculo | null>(null);
 
     const fetchVehicles = useCallback(async (isSilent = false) => {
         if (!isSilent) setLoading(true);
@@ -93,7 +99,7 @@ const Patio: React.FC = () => {
         fetchVehicles();
 
         const channel = supabase
-            .channel('patio_live_sync_final')
+            .channel('patio_live_sync_v5')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'veiculos' }, () => fetchVehicles(true))
             .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
@@ -160,7 +166,10 @@ const Patio: React.FC = () => {
         <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900 overflow-hidden">
             <header className="mb-6 flex-shrink-0">
                 <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-2xl font-bold text-white">Gestão do Pátio</h1>
+                    <div>
+                        <h1 className="text-2xl font-bold text-white">Gestão do Pátio</h1>
+                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-1">Clique no veículo para ver detalhes e editar</p>
+                    </div>
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-800 border-2 border-gray-700 rounded-2xl shadow-xl">
                         <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
@@ -212,6 +221,7 @@ const Patio: React.FC = () => {
                             vehicle={v} 
                             onCheckIn={setVehicleForCheckIn}
                             onCheckout={setVehicleForCheckout}
+                            onViewEdit={setVehicleForEdit}
                         />
                     ))
                 )}
@@ -226,6 +236,11 @@ const Patio: React.FC = () => {
                 vehicle={vehicleForCheckout}
                 onClose={() => setVehicleForCheckout(null)}
                 onConfirm={handleConfirmCheckout}
+            />
+            <VehicleEditModal 
+                vehicle={vehicleForEdit}
+                onClose={() => setVehicleForEdit(null)}
+                onSave={() => fetchVehicles(true)}
             />
         </div>
     );

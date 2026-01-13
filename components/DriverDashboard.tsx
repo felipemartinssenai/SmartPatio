@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { Veiculo } from '../types';
@@ -102,12 +101,13 @@ const DriverDashboard: React.FC = () => {
         currentList.forEach(v => {
           if (v.status === 'aguardando_coleta' && !seenVehicleIds.current.has(v.id)) {
             // Nova coleta detectada!
+            // FIX: Added 'as any' cast to bypass TypeScript error for 'renotify' and 'silent' properties in NotificationOptions
             sendNotification('NOVA COLETA DISPONÍVEL! 🚚', {
               body: `Veículo ${v.modelo || ''} Placa ${v.placa} disponível para retirada.`,
               tag: v.id,
               silent: false,
               renotify: true
-            });
+            } as any);
             seenVehicleIds.current.add(v.id);
           }
         });

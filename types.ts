@@ -19,8 +19,6 @@ export interface Veiculo {
   lat?: number;
   lng?: number;
   codigo_infracao_ctb?: string;
-  infracoes?: string; // Novo campo
-  multas?: string;    // Novo campo
   fotos_avaria_url?: string[];
   proprietario_nome?: string;
   proprietario_telefone?: string;
@@ -85,8 +83,6 @@ export interface FechamentoDetalhe {
     chassi: string;
     renavam: string;
     observacoes: string;
-    infracoes?: string;
-    multas?: string;
     proprietario_nome: string;
     proprietario_telefone: string;
     proprietario_cpf: string;

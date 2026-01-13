@@ -7,6 +7,9 @@ interface SqlSetupModalProps {
 }
 
 const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.0
+-- IMPORTANTE: Para desativar a confirmação de e-mail, vá no painel do Supabase em:
+-- Auth -> Providers -> Email -> DESATIVE "Confirm Email"
+
 -- 1. TIPOS E ENUMS
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
@@ -141,7 +144,9 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 7. CONFIGURAÇÃO FORÇADA DO SEU USUÁRIO ADMIN (MUITO IMPORTANTE)
+-- 7. CONFIGURAÇÃO FORÇADA DO SEU USUÁRIO ADMIN E AUTO-CONFIRMAÇÃO
+UPDATE auth.users SET email_confirmed_at = now() WHERE email = 'felipemartinssenai@gmail.com';
+
 UPDATE public.profiles 
 SET cargo = 'admin', 
     permissions = ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management']::text[]

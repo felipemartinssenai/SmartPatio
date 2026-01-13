@@ -81,8 +81,7 @@ const UserManagement: React.FC = () => {
         setAddError(null);
 
         try {
-            // No Supabase Client padrão, o signUp cria o usuário. 
-            // Como estamos logados como admin, isso pode tentar logar o novo usuário se não houver confirmação de email.
+            // Criação do usuário no Auth do Supabase
             const { error: signUpError } = await (supabase.auth as any).signUp({
                 email: newUserEmail,
                 password: newUserPassword,
@@ -97,12 +96,18 @@ const UserManagement: React.FC = () => {
 
             if (signUpError) throw signUpError;
 
-            alert('Usuário cadastrado com sucesso! O perfil será criado automaticamente via trigger.');
+            // ROTINA DE CONFIRMAÇÃO COMENTADA CONFORME SOLICITADO
+            // alert('Usuário cadastrado com sucesso! Verifique o e-mail se a confirmação estiver ativa no Supabase.');
+            
+            console.log('Usuário criado com sucesso no Auth.');
             setShowAddUser(false);
             setNewUserEmail('');
             setNewUserPassword('');
             setNewUserName('');
-            fetchUsers();
+            
+            // Recarrega a lista (o perfil deve ser criado via Trigger SQL imediatamente)
+            setTimeout(() => fetchUsers(), 1500);
+
         } catch (err: any) {
             setAddError(err.message || 'Erro ao criar usuário');
         } finally {

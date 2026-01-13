@@ -1,11 +1,11 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { Veiculo, VehicleStatus, Movimentacao } from '../types';
 import CheckInModal from './CheckInModal';
 import CheckoutModal from './CheckoutModal';
 
-const REFRESH_INTERVAL = 9000; // 9 segundos conforme solicitado
+const REFRESH_INTERVAL = 9000; // 9 segundos
 
 const STATUS_CONFIG: Record<VehicleStatus, { label: string; bg: string; text: string; border: string }> = {
     'aguardando_coleta': { label: 'Aguardando Coleta', bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500' },
@@ -65,10 +65,10 @@ const VehicleRow: React.FC<{
 const Patio: React.FC = () => {
     const [vehicles, setVehicles] = useState<Veiculo[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'todos'>('todos');
     const [isConnected, setIsConnected] = useState(false);
+    const pollRef = useRef<number | null>(null);
     
     const [vehicleForCheckIn, setVehicleForCheckIn] = useState<Veiculo | null>(null);
     const [vehicleForCheckout, setVehicleForCheckout] = useState<Veiculo | null>(null);
@@ -81,9 +81,7 @@ const Patio: React.FC = () => {
             .neq('status', 'finalizado')
             .order('created_at', { ascending: false });
         
-        if (error) {
-            setError('Erro ao carregar dados do pátio.');
-        } else {
+        if (!error && data) {
             setVehicles(data as Veiculo[]);
         }
         if (!isSilent) setLoading(false);
@@ -93,7 +91,7 @@ const Patio: React.FC = () => {
         fetchVehicles();
 
         const channel = supabase
-            .channel('patio_realtime_9s')
+            .channel('patio_live_sync')
             .on(
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'veiculos' },
@@ -101,13 +99,13 @@ const Patio: React.FC = () => {
             )
             .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
 
-        const pollInterval = setInterval(() => {
+        pollRef.current = window.setInterval(() => {
             fetchVehicles(true);
         }, REFRESH_INTERVAL);
 
         return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
             supabase.removeChannel(channel);
-            clearInterval(pollInterval);
         };
     }, [fetchVehicles]);
 
@@ -136,7 +134,7 @@ const Patio: React.FC = () => {
             .update({ status: 'no_patio' })
             .eq('id', vehicleId);
         
-        fetchVehicles(true);
+        await fetchVehicles(true);
         setVehicleForCheckIn(null);
     };
 
@@ -163,37 +161,37 @@ const Patio: React.FC = () => {
             .update({ status: 'finalizado' })
             .eq('id', movimentacao.veiculo_id);
         
-        fetchVehicles(true);
+        await fetchVehicles(true);
         setVehicleForCheckout(null);
     };
 
     return (
-        <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900">
-            <header className="mb-8">
-                <div className="flex items-center justify-between mb-6">
-                    <h1 className="text-3xl font-bold text-white">Pátio</h1>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-full shadow-sm">
-                        <div className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                            {isConnected ? 'Sincronizado' : '9s Refresh'}
+        <div className="p-4 sm:p-8 flex flex-col h-full bg-gray-900 overflow-hidden">
+            <header className="mb-6 flex-shrink-0">
+                <div className="flex items-center justify-between mb-4">
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tight">Gestão de Pátio</h1>
+                    <div className="flex items-center gap-2 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full">
+                        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></div>
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                            {isConnected ? 'Realtime' : '9s Poll'}
                         </span>
                     </div>
                 </div>
                 
-                <div className="bg-gray-800 p-4 rounded-xl shadow-lg border border-gray-700 flex flex-col md:flex-row gap-4">
+                <div className="bg-gray-800 p-3 rounded-2xl border border-gray-700 flex flex-col md:flex-row gap-3">
                     <input 
                         type="text" 
-                        placeholder="Buscar placa..." 
-                        className="flex-1 px-4 py-3 bg-gray-900 border border-gray-600 rounded-lg text-white"
+                        placeholder="Pesquisar placa ou modelo..." 
+                        className="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-xl text-white outline-none focus:border-blue-500 transition-all"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
-                    <div className="flex gap-2 overflow-x-auto">
+                    <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0">
                         {(['todos', 'no_patio', 'em_transito'] as const).map(s => (
                             <button
                                 key={s}
                                 onClick={() => setStatusFilter(s)}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold uppercase whitespace-nowrap ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap transition-all ${statusFilter === s ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-650'}`}
                             >
                                 {s === 'todos' ? 'Todos' : STATUS_CONFIG[s as VehicleStatus]?.label || s}
                             </button>
@@ -202,9 +200,11 @@ const Patio: React.FC = () => {
                 </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto space-y-4 custom-scrollbar">
+            <main className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                 {loading && !vehicles.length ? (
-                    <div className="text-center py-20 text-gray-500">Buscando pátio...</div>
+                    <div className="text-center py-20 text-gray-600 font-bold uppercase text-xs animate-pulse">Sincronizando inventário...</div>
+                ) : filteredVehicles.length === 0 ? (
+                    <div className="text-center py-20 text-gray-700 italic">Nenhum veículo encontrado com este filtro.</div>
                 ) : (
                     filteredVehicles.map(v => (
                         <VehicleRow 

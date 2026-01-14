@@ -27,6 +27,11 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    
+    // Estados para o Visualizador de Imagens
+    const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+
+    const allPhotos = [...existingPhotos, ...previews];
 
     useEffect(() => {
         if (vehicle) {
@@ -89,10 +94,12 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
         URL.revokeObjectURL(previews[index]);
         setSelectedFiles(prev => prev.filter((_, i) => i !== index));
         setPreviews(prev => prev.filter((_, i) => i !== index));
+        if (viewerIndex !== null) setViewerIndex(null);
     };
 
     const removeExistingFile = (index: number) => {
         setExistingPhotos(prev => prev.filter((_, i) => i !== index));
+        if (viewerIndex !== null) setViewerIndex(null);
     };
 
     const uploadNewImages = async (placa: string): Promise<string[]> => {
@@ -101,13 +108,9 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             try {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-                
                 const { error: uploadError } = await supabase.storage.from('avarias').upload(fileName, file);
                 
-                if (uploadError) {
-                    console.error("Erro no upload:", uploadError);
-                    throw uploadError; // Throw the original error object
-                }
+                if (uploadError) throw uploadError;
                 
                 const { data: { publicUrl } } = supabase.storage.from('avarias').getPublicUrl(fileName);
                 uploadedUrls.push(publicUrl);
@@ -126,7 +129,6 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
 
         try {
             const placaFormatada = formData.placa.toUpperCase().trim();
-            
             const anoInt = formData.ano ? parseInt(formData.ano, 10) : null;
             const anoValido = (anoInt !== null && !isNaN(anoInt)) ? anoInt : null;
 
@@ -144,7 +146,7 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                     renavam: formData.renavam || null,
                     observacoes: formData.observacoes || null,
                     proprietario_nome: formData.proprietarioNome || null,
-                    proprietario_telefone: formData.proprietarioTelefone || null,
+                    proprietario_telefone: formData.proprietario_telefone || null,
                     proprietario_cpf: formData.proprietarioCpf || null,
                     proprietario_cep: formData.proprietarioCep || null,
                     proprietario_rua: formData.proprietarioRua || null,
@@ -158,26 +160,23 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             onSave();
             onClose();
         } catch (err: any) {
-            console.error("Erro ao salvar veículo:", err);
-            // Robust handling of the error object to avoid [object Object]
             let message = 'Erro ao salvar veículo.';
-            if (typeof err === 'string') {
-              message = err;
-            } else if (err.message) {
-              message = err.message;
-            } else if (err.details) {
-              message = err.details;
-            } else {
-              try {
-                message = JSON.stringify(err);
-              } catch (e) {
-                message = 'Erro desconhecido ao salvar veículo.';
-              }
-            }
+            if (typeof err === 'string') message = err;
+            else if (err.message) message = err.message;
             setError(message);
         } finally {
             setLoading(false);
         }
+    };
+
+    const nextImage = () => {
+        if (viewerIndex === null) return;
+        setViewerIndex((viewerIndex + 1) % allPhotos.length);
+    };
+
+    const prevImage = () => {
+        if (viewerIndex === null) return;
+        setViewerIndex((viewerIndex - 1 + allPhotos.length) % allPhotos.length);
     };
 
     if (!vehicle) return null;
@@ -212,28 +211,43 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                             </div>
 
                             <div className="pt-4 border-t border-gray-700/50">
-                                <label className="block text-sm font-medium text-gray-300 mb-4">Fotos de Avaria / Estado do Veículo (Máx. 6)</label>
+                                <label className="block text-sm font-medium text-gray-300 mb-4 flex justify-between items-center">
+                                    <span>Fotos de Avaria / Estado (Máx. 6)</span>
+                                    <span className="text-[10px] text-gray-500 font-bold uppercase">Clique para ampliar</span>
+                                </label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
+                                    {/* Fotos já salvas */}
                                     {existingPhotos.map((url, index) => (
-                                        <div key={`existing-${index}`} className="relative aspect-square group">
-                                            <img src={url} alt="Salva" className="w-full h-full object-cover rounded-xl border-2 border-blue-500/50 shadow-lg" />
+                                        <div key={`existing-${index}`} className="relative aspect-square group cursor-pointer">
+                                            <img 
+                                                src={url} 
+                                                alt="Salva" 
+                                                onClick={() => setViewerIndex(index)}
+                                                className="w-full h-full object-cover rounded-xl border-2 border-blue-500/50 shadow-lg hover:border-blue-400 transition-all" 
+                                            />
                                             <button 
                                                 type="button"
                                                 onClick={() => removeExistingFile(index)}
-                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors"
+                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors z-10"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                             </button>
                                         </div>
                                     ))}
                                     
+                                    {/* Novas fotos */}
                                     {previews.map((preview, index) => (
-                                        <div key={`new-${index}`} className="relative aspect-square group">
-                                            <img src={preview} alt="Nova" className="w-full h-full object-cover rounded-xl border-2 border-green-500/50 shadow-lg" />
+                                        <div key={`new-${index}`} className="relative aspect-square group cursor-pointer">
+                                            <img 
+                                                src={preview} 
+                                                alt="Nova" 
+                                                onClick={() => setViewerIndex(existingPhotos.length + index)}
+                                                className="w-full h-full object-cover rounded-xl border-2 border-green-500/50 shadow-lg hover:border-green-400 transition-all" 
+                                            />
                                             <button 
                                                 type="button"
                                                 onClick={() => removeNewFile(index)}
-                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors"
+                                                className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg hover:bg-red-500 transition-colors z-10"
                                             >
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                                             </button>
@@ -304,6 +318,65 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                     </button>
                 </div>
             </div>
+
+            {/* Image Viewer Overlay */}
+            {viewerIndex !== null && (
+                <div className="fixed inset-0 z-[6000] bg-black/95 flex flex-col items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setViewerIndex(null)}>
+                    
+                    {/* Botão Fechar */}
+                    <button 
+                        onClick={() => setViewerIndex(null)}
+                        className="absolute top-6 right-6 p-4 bg-gray-800/50 hover:bg-gray-700 rounded-full text-white transition-all z-10"
+                    >
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+
+                    {/* Imagem Principal */}
+                    <div className="relative w-full h-full max-w-5xl max-h-[80vh] flex items-center justify-center" onClick={e => e.stopPropagation()}>
+                        <img 
+                            src={allPhotos[viewerIndex]} 
+                            alt="Visualização" 
+                            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                        />
+
+                        {/* Setas de Navegação */}
+                        {allPhotos.length > 1 && (
+                            <>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                                    className="absolute left-0 top-1/2 -translate-y-1/2 p-4 bg-black/40 hover:bg-black/60 rounded-full text-white transition-all -ml-2 sm:-ml-12"
+                                >
+                                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 19l-7-7 7-7"></path></svg>
+                                </button>
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 p-4 bg-black/40 hover:bg-black/60 rounded-full text-white transition-all -mr-2 sm:-mr-12"
+                                >
+                                    <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7"></path></svg>
+                                </button>
+                            </>
+                        )}
+                    </div>
+
+                    {/* Indicador de Posição */}
+                    <div className="mt-8 px-6 py-2 bg-gray-800 rounded-full text-white font-black text-sm uppercase tracking-widest border border-gray-700 shadow-xl">
+                        Foto {viewerIndex + 1} de {allPhotos.length}
+                    </div>
+
+                    {/* Miniaturas Inferiores para Navegação Rápida */}
+                    <div className="mt-6 flex gap-2 overflow-x-auto p-2 max-w-full no-scrollbar" onClick={e => e.stopPropagation()}>
+                        {allPhotos.map((url, idx) => (
+                            <button
+                                key={idx}
+                                onClick={() => setViewerIndex(idx)}
+                                className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all flex-shrink-0 ${viewerIndex === idx ? 'border-blue-500 scale-110 shadow-lg' : 'border-transparent opacity-40 hover:opacity-100'}`}
+                            >
+                                <img src={url} className="w-full h-full object-cover" />
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -19,22 +19,19 @@ export function useAuth() {
         .single();
       
       if (profileError) {
-        // Extrai a mensagem de erro de forma segura
-        const errorMessage = typeof profileError === 'string' 
-          ? profileError 
-          : profileError.message || JSON.stringify(profileError);
-        
+        // Garante que o erro seja convertido para string
+        const errorMessage = profileError.message || JSON.stringify(profileError);
         throw new Error(errorMessage);
       }
       
       if (!data) {
-        throw new Error('Nenhum dado retornado para o perfil do usuário.');
+        throw new Error('Perfil não localizado. Verifique se a trigger v15.0 foi instalada no Supabase.');
       }
       
       setProfile(data as Profile);
     } catch (err: any) {
-      const msg = err.message || 'Erro desconhecido ao carregar permissões.';
-      console.error('Erro ao carregar perfil:', msg);
+      const msg = err.message || 'Falha ao recuperar dados do usuário.';
+      console.error('Erro de autenticação:', msg);
       setError(msg);
       setProfile(null);
     }
@@ -59,7 +56,7 @@ export function useAuth() {
           await fetchProfile(currentSession.user.id);
         }
       } catch (e) {
-        console.error('Erro ao verificar sessão inicial:', e);
+        console.error('Erro ao verificar sessão:', e);
       } finally {
         setLoading(false);
       }

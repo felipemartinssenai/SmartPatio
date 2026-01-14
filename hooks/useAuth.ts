@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { Profile } from '../types';
 
@@ -8,9 +8,11 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isInitialMount = useRef(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
+      setLoading(true);
       setError(null);
       const { data, error: profileError } = await supabase
         .from('profiles')
@@ -19,14 +21,15 @@ export function useAuth() {
         .single();
       
       if (profileError) {
-        throw new Error(profileError.message);
-      }
-      
-      if (data) {
+        // Se o erro for "não encontrado", pode ser que a trigger ainda não criou o perfil
+        console.error('Erro ao buscar perfil:', profileError.message);
+        setError(profileError.message);
+        setProfile(null);
+      } else if (data) {
         setProfile(data as Profile);
       }
     } catch (err: any) {
-      console.error('Erro ao buscar perfil:', err.message);
+      console.error('Erro crítico no fetchProfile:', err.message);
       setError(err.message);
       setProfile(null);
     } finally {
@@ -36,19 +39,26 @@ export function useAuth() {
 
   const handleLogout = useCallback(async () => {
     setLoading(true);
-    await supabase.auth.signOut();
-    window.localStorage.removeItem('patiolog-auth-v2-stable');
-    setSession(null);
-    setProfile(null);
-    setLoading(false);
-    window.location.href = '/'; 
+    try {
+      await supabase.auth.signOut();
+      window.localStorage.removeItem('patiolog-auth-v2-stable');
+      setSession(null);
+      setProfile(null);
+      window.location.href = '/'; 
+    } catch (e) {
+      window.localStorage.clear();
+      window.location.reload();
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    const checkSession = async () => {
+    const initializeAuth = async () => {
       setLoading(true);
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
         if (currentSession) {
           setSession(currentSession);
           await fetchProfile(currentSession.user.id);
@@ -56,15 +66,19 @@ export function useAuth() {
           setLoading(false);
         }
       } catch (e) {
+        console.error('Erro na inicialização da sessão:', e);
         setLoading(false);
       }
     };
 
-    checkSession();
+    if (isInitialMount.current) {
+      initializeAuth();
+      isInitialMount.current = false;
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        if (event === 'SIGNED_IN') {
           setSession(currentSession);
           if (currentSession?.user) {
             await fetchProfile(currentSession.user.id);
@@ -73,6 +87,8 @@ export function useAuth() {
           setSession(null);
           setProfile(null);
           setLoading(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          setSession(currentSession);
         }
       }
     );

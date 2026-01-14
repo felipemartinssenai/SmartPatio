@@ -79,7 +79,7 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             return;
         }
 
-        const newPreviews = files.map(file => URL.createObjectURL(file));
+        const newPreviews = files.map(file => URL.createObjectURL(file as Blob));
         setSelectedFiles(prev => [...prev, ...files]);
         setPreviews(prev => [...prev, ...newPreviews]);
         setError(null);
@@ -101,14 +101,16 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             try {
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-                const { error: uploadError } = await supabase.storage.from('veiculos_fotos').upload(fileName, file);
+                
+                // Alterado para usar o bucket 'avarias'
+                const { error: uploadError } = await supabase.storage.from('avarias').upload(fileName, file);
                 
                 if (uploadError) {
                     console.error("Erro no upload:", uploadError);
-                    throw new Error(`Erro no upload da foto: ${uploadError.message}`);
+                    throw new Error(`Erro no upload da foto para o bucket 'avarias': ${uploadError.message}`);
                 }
                 
-                const { data: { publicUrl } } = supabase.storage.from('veiculos_fotos').getPublicUrl(fileName);
+                const { data: { publicUrl } } = supabase.storage.from('avarias').getPublicUrl(fileName);
                 uploadedUrls.push(publicUrl);
             } catch (err: any) {
                 throw err;
@@ -126,7 +128,6 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
         try {
             const placaFormatada = formData.placa.toUpperCase().trim();
             
-            // Validação preventiva do Ano para evitar NaN
             const anoInt = formData.ano ? parseInt(formData.ano, 10) : null;
             const anoValido = (anoInt !== null && !isNaN(anoInt)) ? anoInt : null;
 
@@ -171,7 +172,6 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[5000] p-4" onClick={onClose}>
             <div className="bg-gray-800 rounded-[32px] w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl border border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
                 
-                {/* Header idêntico à tela de Solicitação */}
                 <div className="p-6 border-b border-gray-700 flex justify-between items-center bg-gray-900/50">
                     <h2 className="text-2xl font-black text-white flex items-center gap-3">
                         <span className="bg-white text-black px-3 py-1 rounded-lg font-mono">{vehicle.placa}</span>
@@ -182,12 +182,10 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                     </button>
                 </div>
 
-                {/* Corpo do Modal - Reutilizando visual de SolicitaçãoColeta */}
                 <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar bg-gray-900">
                     <form onSubmit={handleSave} id="edit-vehicle-form" className="space-y-8 pb-10">
                         {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-xl text-center border border-red-500/50 font-bold">{error}</div>}
 
-                        {/* Seção: Dados do Veículo */}
                         <fieldset className="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700 space-y-6">
                             <legend className="px-4 text-xl font-bold text-blue-400">Dados do Veículo</legend>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -199,11 +197,9 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                                 <InputField label="Renavam" name="renavam" value={formData.renavam} onChange={handleChange} />
                             </div>
 
-                            {/* Área de Fotos (Idêntica à Solicitação) */}
                             <div className="pt-4 border-t border-gray-700/50">
                                 <label className="block text-sm font-medium text-gray-300 mb-4">Fotos de Avaria / Estado do Veículo (Máx. 6)</label>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4">
-                                    {/* Fotos já salvas */}
                                     {existingPhotos.map((url, index) => (
                                         <div key={`existing-${index}`} className="relative aspect-square group">
                                             <img src={url} alt="Salva" className="w-full h-full object-cover rounded-xl border-2 border-blue-500/50 shadow-lg" />
@@ -217,7 +213,6 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                                         </div>
                                     ))}
                                     
-                                    {/* Novas fotos (previews) */}
                                     {previews.map((preview, index) => (
                                         <div key={`new-${index}`} className="relative aspect-square group">
                                             <img src={preview} alt="Nova" className="w-full h-full object-cover rounded-xl border-2 border-green-500/50 shadow-lg" />
@@ -257,7 +252,6 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                             </div>
                         </fieldset>
 
-                        {/* Seção: Dados do Proprietário */}
                         <fieldset className="bg-gray-800 p-6 rounded-2xl shadow-xl border border-gray-700 space-y-6">
                             <legend className="px-4 text-xl font-bold text-blue-400">Dados do Proprietário</legend>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -279,7 +273,6 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                     </form>
                 </div>
 
-                {/* Footer Modal */}
                 <div className="p-6 border-t border-gray-700 flex gap-3 bg-gray-900/80 backdrop-blur-md">
                     <button 
                         onClick={onClose}

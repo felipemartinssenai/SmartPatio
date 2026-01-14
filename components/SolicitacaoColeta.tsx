@@ -68,7 +68,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
         return;
     }
 
-    const newPreviews = files.map(file => URL.createObjectURL(file));
+    const newPreviews = files.map(file => URL.createObjectURL(file as Blob));
     setSelectedFiles(prev => [...prev, ...files]);
     setPreviews(prev => [...prev, ...newPreviews]);
     setError(null);
@@ -88,17 +88,21 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
             const fileExt = file.name.split('.').pop();
             const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
             
+            // Alterado para usar o bucket 'avarias'
             const { data, error: uploadError } = await supabase.storage
-                .from('veiculos_fotos')
+                .from('avarias')
                 .upload(fileName, file);
             
             if (uploadError) {
                 console.error('Erro no upload de foto:', uploadError);
-                throw new Error(`Erro ao subir foto: ${uploadError.message}. Verifique se o bucket 'veiculos_fotos' existe.`);
+                if (uploadError.message === 'Bucket not found') {
+                    throw new Error("O bucket 'avarias' não foi encontrado no seu Storage. Por favor, certifique-se de que ele existe e está configurado como 'Public'.");
+                }
+                throw new Error(`Erro ao subir foto: ${uploadError.message}`);
             }
 
             const { data: { publicUrl } } = supabase.storage
-                .from('veiculos_fotos')
+                .from('avarias')
                 .getPublicUrl(fileName);
             
             uploadedUrls.push(publicUrl);
@@ -124,18 +128,15 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
     try {
         const placaFormatada = formData.placa.toUpperCase().trim();
         
-        // Validação preventiva do Ano para evitar NaN no RPC
         const anoInt = formData.ano ? parseInt(formData.ano, 10) : null;
         const anoValido = (anoInt !== null && !isNaN(anoInt)) ? anoInt : null;
 
         let fotoUrls: string[] = [];
         
-        // 1. Upload das Fotos se houverem
         if (selectedFiles.length > 0) {
             fotoUrls = await uploadImages(placaFormatada);
         }
 
-        // 2. Chamada RPC com URLs das fotos
         const payload = {
           p_ano: anoValido,
           p_chassi: formData.chassi || null,
@@ -165,7 +166,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
         setTimeout(() => setCurrentPage('patio'), 2000);
     } catch (err: any) {
         console.error('Erro na solicitação:', err);
-        setError(`Erro ao salvar: ${err.message || 'Verifique sua conexão e configurações.'}`);
+        setError(err.message || 'Erro ao processar solicitação. Tente novamente.');
     } finally {
         setLoading(false);
     }
@@ -177,7 +178,16 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
         <h1 className="text-3xl font-bold text-white mb-6">Solicitar Nova Coleta</h1>
         
         <form onSubmit={handleSubmit} className="space-y-8 pb-20">
-          {error && <div className="bg-red-500/20 text-red-300 p-4 rounded-xl text-center border border-red-500/50 font-bold">{error}</div>}
+          {error && (
+            <div className="bg-red-500/20 text-red-300 p-4 rounded-xl text-center border border-red-500/50 font-bold space-y-2">
+                <p>{error}</p>
+                {error.includes('bucket') && (
+                    <p className="text-[10px] uppercase tracking-widest text-red-400/70 pt-2 border-t border-red-500/20">
+                        DICA: Verifique se o bucket 'avarias' no seu Storage do Supabase está marcado como PUBLIC.
+                    </p>
+                )}
+            </div>
+          )}
           {success && <div className="bg-green-500/20 text-green-300 p-4 rounded-xl text-center border border-green-500/50 font-bold">{success}</div>}
 
           {/* Seção: Dados do Veículo */}

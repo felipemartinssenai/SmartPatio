@@ -6,10 +6,12 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.2 (Suporte a Fotos)
--- ⚠️ IMPORTANTE: 
--- 1. Crie um bucket chamado 'veiculos_fotos' no Storage do Supabase.
--- 2. Torne o bucket PÚBLICO.
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.3 (Utilizando Bucket 'avarias')
+-- ⚠️ INSTRUÇÃO OBRIGATÓRIA:
+-- Além deste script, verifique se o bucket existe no painel do Supabase:
+-- 1. Vá em Storage
+-- 2. Localize ou crie o bucket: avarias
+-- 3. Certifique-se que ele é "PUBLIC"
 
 -- 0. CONFIRMAR TODOS OS USUÁRIOS ATUAIS
 UPDATE auth.users SET email_confirmed_at = now() WHERE email_confirmed_at IS NULL;
@@ -59,7 +61,7 @@ CREATE TABLE IF NOT EXISTS public.veiculos (
     created_at timestamptz DEFAULT now()
 );
 
--- 4. FUNÇÃO RPC PARA CRIAR COLETA (ATUALIZADA v7.2)
+-- 4. FUNÇÃO RPC PARA CRIAR COLETA (ATUALIZADA v7.3)
 CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(
     p_placa text,
     p_modelo text DEFAULT NULL,
@@ -167,14 +169,14 @@ DROP POLICY IF EXISTS "Acesso total fin" ON public.financeiro;
 CREATE POLICY "Acesso total fin" ON public.financeiro FOR ALL USING (auth.role() = 'authenticated');`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.2 (Fotos)');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.3 (Avarias)');
 
   if (!isOpen) return null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v7.2 (Fotos)'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v7.3 (Avarias)'), 2000);
   };
 
   return (
@@ -182,23 +184,41 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-start mb-4">
             <div className="flex flex-col">
-                <h2 className="text-xl font-bold text-white">Setup Geral (v7.2)</h2>
-                <p className="text-xs text-blue-400 font-black uppercase tracking-widest mt-1">Suporte a Fotos de Avaria</p>
+                <h2 className="text-xl font-bold text-white">Configuração do Sistema</h2>
+                <p className="text-xs text-blue-400 font-black uppercase tracking-widest mt-1">Setup do Banco e Storage</p>
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
         </div>
         
-        <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl mb-4 text-xs text-blue-200">
-            <b>Atenção:</b> Este script atualiza o sistema para suportar fotos. Lembre-se de criar o bucket <u>veiculos_fotos</u> no seu Supabase Storage.
+        <div className="space-y-4 mb-4 overflow-y-auto custom-scrollbar pr-2">
+            {/* Alerta Crítico sobre Storage */}
+            <div className="bg-amber-500/10 border-2 border-amber-500/50 p-4 rounded-xl">
+                <h3 className="text-amber-400 font-bold flex items-center gap-2 mb-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    PASSO OBRIGATÓRIO: Storage
+                </h3>
+                <p className="text-amber-200/80 text-xs leading-relaxed">
+                    Utilizamos o bucket de armazenamento para as fotos dos veículos:
+                </p>
+                <ol className="list-decimal list-inside text-xs text-amber-100 mt-2 space-y-1 ml-1">
+                    <li>No Dashboard do Supabase, clique em <b>Storage</b>.</li>
+                    <li>Certifique-se que o bucket se chama: <code className="bg-black/50 px-1 rounded text-white select-all">avarias</code></li>
+                    <li>O bucket <b>deve</b> estar marcado como <b>Public bucket</b> para exibição das imagens.</li>
+                </ol>
+            </div>
+
+            <div className="bg-blue-500/10 border border-blue-500/30 p-4 rounded-xl text-xs text-blue-200">
+                <b>Script SQL:</b> Copie o código abaixo e execute-o no <b>SQL Editor</b> do seu Supabase para criar as tabelas e permissões.
+            </div>
+
+            <pre className="bg-black p-4 rounded-xl overflow-auto text-[10px] font-mono text-green-400 border border-gray-700">
+              <code>{SQL_SCRIPT}</code>
+            </pre>
         </div>
 
-        <pre className="bg-black p-4 rounded-xl overflow-auto flex-1 text-[10px] font-mono text-green-400 border border-gray-700 custom-scrollbar">
-          <code>{SQL_SCRIPT}</code>
-        </pre>
-
-        <div className="mt-6 flex justify-end gap-3">
+        <div className="mt-2 flex justify-end gap-3">
           <button onClick={onClose} className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl text-sm font-bold transition-all">Fechar</button>
           <button onClick={handleCopy} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-xl font-black text-sm shadow-xl transition-all">{copyButtonText}</button>
         </div>

@@ -19,45 +19,43 @@ export function useAuth() {
         .single();
       
       if (profileError) {
-        // Garante que o erro seja convertido para string
-        const errorMessage = profileError.message || JSON.stringify(profileError);
-        throw new Error(errorMessage);
+        throw new Error(profileError.message);
       }
       
-      if (!data) {
-        throw new Error('Perfil não localizado. Verifique se a trigger v15.0 foi instalada no Supabase.');
+      if (data) {
+        setProfile(data as Profile);
       }
-      
-      setProfile(data as Profile);
     } catch (err: any) {
-      const msg = err.message || 'Falha ao recuperar dados do usuário.';
-      console.error('Erro de autenticação:', msg);
-      setError(msg);
+      console.error('Erro ao buscar perfil:', err.message);
+      setError(err.message);
       setProfile(null);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   const handleLogout = useCallback(async () => {
+    setLoading(true);
     await supabase.auth.signOut();
     window.localStorage.removeItem('patiolog-auth-v2-stable');
     setSession(null);
     setProfile(null);
-    setError(null);
     setLoading(false);
     window.location.href = '/'; 
   }, []);
 
   useEffect(() => {
     const checkSession = async () => {
+      setLoading(true);
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         if (currentSession) {
           setSession(currentSession);
           await fetchProfile(currentSession.user.id);
+        } else {
+          setLoading(false);
         }
       } catch (e) {
-        console.error('Erro ao verificar sessão:', e);
-      } finally {
         setLoading(false);
       }
     };
@@ -71,7 +69,6 @@ export function useAuth() {
           if (currentSession?.user) {
             await fetchProfile(currentSession.user.id);
           }
-          setLoading(false);
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setProfile(null);

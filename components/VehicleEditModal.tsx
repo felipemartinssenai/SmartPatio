@@ -102,12 +102,11 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                 const fileExt = file.name.split('.').pop();
                 const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
                 
-                // Alterado para usar o bucket 'avarias'
                 const { error: uploadError } = await supabase.storage.from('avarias').upload(fileName, file);
                 
                 if (uploadError) {
                     console.error("Erro no upload:", uploadError);
-                    throw new Error(`Erro no upload da foto para o bucket 'avarias': ${uploadError.message}`);
+                    throw uploadError; // Throw the original error object
                 }
                 
                 const { data: { publicUrl } } = supabase.storage.from('avarias').getPublicUrl(fileName);
@@ -160,7 +159,22 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             onClose();
         } catch (err: any) {
             console.error("Erro ao salvar veículo:", err);
-            setError(`Erro ao salvar: ${err.message || 'Verifique sua conexão.'}`);
+            // Robust handling of the error object to avoid [object Object]
+            let message = 'Erro ao salvar veículo.';
+            if (typeof err === 'string') {
+              message = err;
+            } else if (err.message) {
+              message = err.message;
+            } else if (err.details) {
+              message = err.details;
+            } else {
+              try {
+                message = JSON.stringify(err);
+              } catch (e) {
+                message = 'Erro desconhecido ao salvar veículo.';
+              }
+            }
+            setError(message);
         } finally {
             setLoading(false);
         }

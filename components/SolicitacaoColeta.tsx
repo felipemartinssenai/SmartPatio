@@ -88,7 +88,6 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
             const fileExt = file.name.split('.').pop();
             const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
             
-            // Alterado para usar o bucket 'avarias'
             const { data, error: uploadError } = await supabase.storage
                 .from('avarias')
                 .upload(fileName, file);
@@ -98,7 +97,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
                 if (uploadError.message === 'Bucket not found') {
                     throw new Error("O bucket 'avarias' não foi encontrado no seu Storage. Por favor, certifique-se de que ele existe e está configurado como 'Public'.");
                 }
-                throw new Error(`Erro ao subir foto: ${uploadError.message}`);
+                throw uploadError; // Throw the original error object to be caught by handleSubmit
             }
 
             const { data: { publicUrl } } = supabase.storage
@@ -166,7 +165,24 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
         setTimeout(() => setCurrentPage('patio'), 2000);
     } catch (err: any) {
         console.error('Erro na solicitação:', err);
-        setError(err.message || 'Erro ao processar solicitação. Tente novamente.');
+        // Robust handling of the error object to avoid [object Object]
+        let message = 'Erro ao processar solicitação.';
+        if (typeof err === 'string') {
+          message = err;
+        } else if (err.message) {
+          message = err.message;
+        } else if (err.details) {
+          message = err.details;
+        } else if (err.hint) {
+          message = err.hint;
+        } else {
+          try {
+            message = JSON.stringify(err);
+          } catch (e) {
+            message = 'Erro desconhecido durante a solicitação.';
+          }
+        }
+        setError(message);
     } finally {
         setLoading(false);
     }

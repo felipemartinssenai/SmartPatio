@@ -6,7 +6,7 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v9.0
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v10.0 (Tracking Realtime)
 -- 1. TABELA DE CONFIGURAÇÕES SISTEMAS
 CREATE TABLE IF NOT EXISTS public.configuracoes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -30,13 +30,16 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 3. TABELA DE PERFIS
+-- 3. TABELA DE PERFIS (Com Tracking)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text,
     avatar_url text,
     cargo public.user_role NOT NULL DEFAULT 'motorista',
-    permissions text[] DEFAULT ARRAY['collections']::text[]
+    permissions text[] DEFAULT ARRAY['collections']::text[],
+    lat double precision,
+    lng double precision,
+    last_seen timestamptz
 );
 
 -- 4. TABELA DE VEÍCULOS
@@ -108,7 +111,7 @@ BEGIN
     new.id,
     COALESCE(new.raw_user_meta_data->>'full_name', 'Novo Usuário'),
     CASE WHEN new.email = 'felipemartinssenai@gmail.com' THEN 'admin'::public.user_role ELSE 'motorista'::public.user_role END,
-    CASE WHEN new.email = 'felipemartinssenai@gmail.com' THEN ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management', 'payment_methods', 'settings']::text[] ELSE ARRAY['collections']::text[] END
+    CASE WHEN new.email = 'felipemartinssenai@gmail.com' THEN ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management', 'payment_methods', 'invoices', 'settings']::text[] ELSE ARRAY['collections']::text[] END
   ) ON CONFLICT (id) DO UPDATE SET cargo = EXCLUDED.cargo, permissions = EXCLUDED.permissions;
   RETURN new;
 END;
@@ -130,19 +133,19 @@ DROP POLICY IF EXISTS "Acesso total" ON public.formas_pagamento; CREATE POLICY "
 DROP POLICY IF EXISTS "Acesso total" ON public.configuracoes; CREATE POLICY "Acesso total" ON public.configuracoes FOR ALL USING (true);`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v9.0');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v10.0');
   if (!isOpen) return null;
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v9.0'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v10.0'), 2000);
   };
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[5000] p-4" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl font-bold text-white mb-4">Configuração v9.0 (Asaas)</h2>
+        <h2 className="text-xl font-bold text-white mb-4">Configuração v10.0 (Tracking)</h2>
         <div className="space-y-4 mb-4 overflow-y-auto custom-scrollbar pr-2">
-            <p className="text-xs text-blue-200">Execute este script no SQL Editor para habilitar a tabela de configurações e os novos campos de integração.</p>
+            <p className="text-xs text-blue-200">Este script adiciona suporte a rastreamento GPS em tempo real para motoristas e veículos.</p>
             <pre className="bg-black p-4 rounded-xl overflow-auto text-[10px] font-mono text-green-400 border border-gray-700"><code>{SQL_SCRIPT}</code></pre>
         </div>
         <div className="flex justify-end gap-3"><button onClick={onClose} className="px-6 py-2.5 bg-gray-700 rounded-xl text-sm font-bold">Fechar</button><button onClick={handleCopy} className="px-6 py-2.5 bg-blue-600 rounded-xl font-black text-sm">{copyButtonText}</button></div>

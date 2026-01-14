@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './hooks/useAuth';
+import { useLocationTracking } from './hooks/useLocationTracking';
 import AuthComponent from './components/Auth';
 import DriverDashboard from './components/DriverDashboard';
 import AdminDashboard from './components/AdminDashboard';
@@ -18,6 +19,9 @@ import { Page } from './types';
 const App: React.FC = () => {
   const { session, profile, loading, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+
+  // Inicia o rastreamento se for motorista
+  useLocationTracking(profile);
 
   // Recuperar última página visitada para melhorar experiência
   useEffect(() => {

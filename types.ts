@@ -12,7 +12,7 @@ export type Page =
   | 'fechamentos'
   | 'user_management'
   | 'payment_methods'
-  | 'invoices' // Nova página para gestão de faturas
+  | 'invoices' 
   | 'settings';
 
 export interface Profile {
@@ -21,6 +21,9 @@ export interface Profile {
   avatar_url?: string;
   cargo: UserRole;
   permissions: Page[];
+  lat?: number;
+  lng?: number;
+  last_seen?: string;
 }
 
 export interface FormaPagamento {

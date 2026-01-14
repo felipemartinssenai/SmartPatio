@@ -1,8 +1,10 @@
 
 /**
  * Calcula o valor total das diárias com base nas datas de entrada e saída.
- * REGRA DE NEGÓCIO: Se o tempo excedente à última diária for maior que 60 minutos,
- * cobra-se uma nova diária completa.
+ * REGRA DE NEGÓCIO: 
+ * 1. Se a diferença for zero (Check-in e Checkout iguais), cobra-se 1 diária.
+ * 2. Se o tempo excedente à última diária for maior que 60 minutos, cobra-se uma nova diária completa.
+ * 3. Qualquer tempo de permanência inferior a 24h + 60min resulta em pelo menos 1 diária.
  *
  * @param dataEntradaISO - A data e hora de entrada do veículo no formato ISO string.
  * @param dataSaidaISO - A data e hora de saída do veículo no formato ISO string.
@@ -23,8 +25,15 @@ export const calcularTotalDiarias = (
 
   // Calcula a diferença total em milissegundos
   const diffMs = dataSaida.getTime() - dataEntrada.getTime();
-  if (diffMs <= 0) {
+  
+  // Se a saída for antes da entrada (erro de input), retornamos 0 ou tratamos como 1 se for muito próximo
+  if (diffMs < 0) {
     return 0;
+  }
+
+  // REGRA SOLICITADA: Se forem iguais (diffMs === 0), cobra 1 diária.
+  if (diffMs === 0) {
+    return valorDiaria;
   }
 
   // Constantes para conversão
@@ -42,31 +51,21 @@ export const calcularTotalDiarias = (
   
   let totalDiariasACobrar = diasCompletos;
 
-  // Se houver tempo restante, verifica a regra de tolerância
+  // Se houver tempo restante, verifica a regra de tolerância de 60 minutos
   if (minutosRestantes > 0) {
     if (minutosRestantes > 60) {
-      // Se excedeu 60 minutos de tolerância, cobra uma diária a mais
+      // Se excedeu 60 minutos de tolerância além de um dia completo, cobra uma diária a mais
       totalDiariasACobrar += 1;
     } else if (diasCompletos === 0) {
-      // Se for a primeira diária e ficou menos de 60 minutos, cobra 1 diária mínima
+      // Se estiver no primeiro dia e ficou qualquer tempo (mesmo < 60min), cobra 1 diária mínima
       totalDiariasACobrar = 1;
     }
-  } else if (diasCompletos === 0 && diffMs > 0) {
-    // Se ficou um tempo mínimo (mas menos de 1 minuto), ainda cobra 1 diária
-    totalDiariasACobrar = 1;
   }
 
-  // Se não ficou nenhuma diária completa e nenhum tempo excedente, mas a entrada e saída são diferentes, cobra 1 diária
-  if (totalDiariasACobrar === 0 && diffMs > 0) {
+  // Fallback de segurança: se houve permanência mas o cálculo resultou em 0, garante 1 diária
+  if (totalDiariasACobrar === 0 && diffMs >= 0) {
     totalDiariasACobrar = 1;
   }
 
   return totalDiariasACobrar * valorDiaria;
 };
-
-// Exemplo de uso:
-// const dataEntrada = '2023-01-01T10:00:00.000Z';
-// const dataSaida = '2023-01-02T11:01:00.000Z'; // 1 dia, 1 hora e 1 minuto
-// const valorDiaria = 50.00;
-// const total = calcularTotalDiarias(dataEntrada, dataSaida, valorDiaria);
-// console.log(total); // Deve retornar 100 (2 diárias * R$50)

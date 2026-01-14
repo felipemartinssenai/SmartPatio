@@ -5,10 +5,16 @@ import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
 import { useLocationTracking } from '../hooks/useLocationTracking';
+import VehicleDetailModal from './VehicleDetailModal';
 
 const REFRESH_INTERVAL = 9000;
 
-const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Veiculo) => void; isTracking: boolean }> = ({ vehicle, onStartCollection, isTracking }) => {
+const VehicleCard: React.FC<{ 
+    vehicle: Veiculo; 
+    onStartCollection: (vehicle: Veiculo) => void; 
+    onShowDetail: (vehicle: Veiculo) => void;
+    isTracking: boolean 
+}> = ({ vehicle, onStartCollection, onShowDetail, isTracking }) => {
   const getStatusChip = (status: Veiculo['status']) => {
     switch (status) {
       case 'aguardando_coleta':
@@ -21,13 +27,21 @@ const VehicleCard: React.FC<{ vehicle: Veiculo; onStartCollection: (vehicle: Vei
   };
 
   return (
-    <div className="bg-gray-800 p-5 rounded-2xl shadow-xl space-y-4 border border-gray-700 hover:border-blue-500/30 transition-all duration-300">
+    <div 
+      onClick={() => onShowDetail(vehicle)}
+      className="bg-gray-800 p-5 rounded-[24px] shadow-xl space-y-4 border border-gray-700 hover:border-blue-500/30 transition-all duration-300 cursor-pointer active:scale-[0.98] group"
+    >
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-1">{vehicle.modelo || 'Veículo'}</p>
-          <p className="text-3xl font-mono font-black bg-white text-black rounded-lg px-3 py-1 inline-block shadow-lg">
-            {vehicle.placa}
-          </p>
+          <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-1 group-hover:text-blue-400 transition-colors">{vehicle.modelo || 'Veículo'}</p>
+          <div className="flex items-center gap-3">
+              <p className="text-3xl font-mono font-black bg-white text-black rounded-lg px-3 py-1 inline-block shadow-lg">
+                {vehicle.placa}
+              </p>
+              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 5l7 7-7 7"></path></svg>
+              </div>
+          </div>
         </div>
         {getStatusChip(vehicle.status)}
       </div>
@@ -80,6 +94,7 @@ const DriverDashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isConnected, setIsConnected] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState<Veiculo | null>(null);
   
   const seenVehicleIds = useRef<Set<string>>(new Set());
   const initialLoadDone = useRef(false);
@@ -171,6 +186,12 @@ const DriverDashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-gray-900" onClick={() => playChime()}>
+      
+      <VehicleDetailModal 
+        vehicle={selectedVehicle} 
+        onClose={() => setSelectedVehicle(null)} 
+      />
+
       {/* Barra de Status Multi-Monitoramento */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between z-20 overflow-x-auto gap-4 no-scrollbar">
           <div className="flex items-center gap-4 flex-shrink-0">
@@ -216,7 +237,7 @@ const DriverDashboard: React.FC = () => {
 
       <main className="flex-1 p-4 overflow-y-auto space-y-4 pb-20">
         {gpsStatus === 'denied' && (
-           <div className="bg-red-600 text-white p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-center shadow-lg animate-bounce">
+           <div className="bg-red-600 text-white p-4 rounded-[20px] font-black text-[10px] uppercase tracking-widest text-center shadow-lg animate-bounce">
               ⚠️ ATENÇÃO: Habilite a localização nas configurações do seu navegador para ser visto no mapa!
            </div>
         )}
@@ -230,7 +251,13 @@ const DriverDashboard: React.FC = () => {
         ) : (
             <div className="grid grid-cols-1 gap-4">
                 {filteredVehicles.map((v) => (
-                  <VehicleCard key={v.id} vehicle={v} onStartCollection={handleStartCollection} isTracking={v.motorista_id === user?.id} />
+                  <VehicleCard 
+                    key={v.id} 
+                    vehicle={v} 
+                    onStartCollection={handleStartCollection} 
+                    onShowDetail={setSelectedVehicle}
+                    isTracking={v.motorista_id === user?.id} 
+                  />
                 ))}
             </div>
         )}

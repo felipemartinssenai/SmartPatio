@@ -54,11 +54,13 @@ COMMENT ON TABLE public.profiles IS 'Configurado para v15.0: Auto-Profile e Auto
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
   const [copyButtonText, setCopyButtonText] = useState('Copiar Script v15.0');
   if (!isOpen) return null;
+
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
     setTimeout(() => setCopyButtonText('Copiar Script v15.0'), 2000);
   };
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[5000] p-4" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -79,7 +81,9 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
             
             <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-yellow-500">
                 <p className="font-black uppercase text-[10px]">⚠️ AÇÃO MANUAL OBRIGATÓRIA:</p>
-                <p className="mt-1">No painel do Supabase, vá em <strong>Authentication -> Providers -> Email</strong> e DESATIVE a opção "Confirm Email". Isso garantirá que o Supabase pare de tentar enviar e-mails para contas de teste.</p>
+                <p className="mt-1">
+                  No painel do Supabase, vá em <strong>Authentication &rarr; Providers &rarr; Email</strong> e DESATIVE a opção "Confirm Email". Isso garantirá que o Supabase pare de tentar enviar e-mails para contas de teste.
+                </p>
             </div>
         </div>
         <div className="flex justify-end gap-3">

@@ -19,9 +19,16 @@ export function useAuth() {
         .single();
       
       if (profileError) {
-        // Se o perfil não existe, pode ser delay da trigger
-        console.warn('Perfil não encontrado, tentando novamente em 2s...');
-        throw new Error(profileError.message || 'Perfil não localizado na base de dados.');
+        // Extrai a mensagem de erro de forma segura
+        const errorMessage = typeof profileError === 'string' 
+          ? profileError 
+          : profileError.message || JSON.stringify(profileError);
+        
+        throw new Error(errorMessage);
+      }
+      
+      if (!data) {
+        throw new Error('Nenhum dado retornado para o perfil do usuário.');
       }
       
       setProfile(data as Profile);
@@ -29,7 +36,6 @@ export function useAuth() {
       const msg = err.message || 'Erro desconhecido ao carregar permissões.';
       console.error('Erro ao carregar perfil:', msg);
       setError(msg);
-      // Se falhar drasticamente, limpa para não travar o app
       setProfile(null);
     }
   }, []);
@@ -46,12 +52,17 @@ export function useAuth() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (currentSession) {
-        setSession(currentSession);
-        await fetchProfile(currentSession.user.id);
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+          setSession(currentSession);
+          await fetchProfile(currentSession.user.id);
+        }
+      } catch (e) {
+        console.error('Erro ao verificar sessão inicial:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     checkSession();

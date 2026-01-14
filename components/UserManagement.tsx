@@ -8,9 +8,12 @@ const ALL_PAGES: { id: Page; label: string; icon: string }[] = [
     { id: 'patio', label: 'Gestão de Pátio', icon: '🏠' },
     { id: 'solicitacao_coleta', label: 'Solicitar Coleta', icon: '➕' },
     { id: 'collections', label: 'Minhas Coletas (Motorista)', icon: '🚛' },
+    { id: 'invoices', label: 'Faturas', icon: '🧾' },
     { id: 'financials', label: 'Financeiro', icon: '💰' },
-    { id: 'fechamentos', label: 'Fechamentos', icon: '📊' },
+    { id: 'fechamentos', label: 'Relatórios', icon: '📊' },
     { id: 'user_management', label: 'Gestão de Usuários', icon: '👥' },
+    { id: 'payment_methods', label: 'Pagamentos', icon: '💳' },
+    { id: 'settings', label: 'Configurações', icon: '⚙️' },
 ];
 
 const UserManagement: React.FC = () => {
@@ -96,16 +99,11 @@ const UserManagement: React.FC = () => {
 
             if (signUpError) throw signUpError;
 
-            // ROTINA DE CONFIRMAÇÃO COMENTADA CONFORME SOLICITADO
-            // alert('Usuário cadastrado com sucesso! Verifique o e-mail se a confirmação estiver ativa no Supabase.');
-            
-            console.log('Usuário criado com sucesso no Auth.');
             setShowAddUser(false);
             setNewUserEmail('');
             setNewUserPassword('');
             setNewUserName('');
             
-            // Recarrega a lista (o perfil deve ser criado via Trigger SQL imediatamente)
             setTimeout(() => fetchUsers(), 1500);
 
         } catch (err: any) {

@@ -3,7 +3,6 @@ export type UserRole = 'admin' | 'operador' | 'motorista';
 export type VehicleStatus = 'aguardando_coleta' | 'em_transito' | 'no_patio' | 'finalizado';
 export type TransactionType = 'entrada' | 'saida';
 
-// Definição das páginas para controle de acesso
 export type Page = 
   | 'dashboard' 
   | 'collections' 
@@ -12,14 +11,16 @@ export type Page =
   | 'patio' 
   | 'fechamentos'
   | 'user_management'
-  | 'payment_methods'; // Nova página
+  | 'payment_methods'
+  | 'invoices' // Nova página para gestão de faturas
+  | 'settings';
 
 export interface Profile {
   id: string;
   full_name: string;
   avatar_url?: string;
   cargo: UserRole;
-  permissions: Page[]; // Array de strings com as chaves das páginas permitidas
+  permissions: Page[];
 }
 
 export interface FormaPagamento {
@@ -66,6 +67,7 @@ export interface Movimentacao {
   total_pago?: number;
   forma_pagamento?: string;
   created_at: string;
+  asaas_id?: string;
 }
 
 export interface Financeiro {
@@ -113,4 +115,9 @@ export interface FechamentoDetalhe {
     data_saida: string;
     valor_diaria: number;
     total_pago: number;
+}
+
+export interface AsaasSettings {
+    api_key: string;
+    environment: 'sandbox' | 'production';
 }

@@ -8,97 +8,68 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfileWithRetry = useCallback(async (user: any, retries = 5): Promise<Profile | null> => {
+  const fetchProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
       
-      if (error) {
-        if (error.code === 'PGRST116' && retries > 0) {
-          console.warn(`Aguardando perfil ser criado... (${retries} tentativas restantes)`);
-          await new Promise(res => setTimeout(res, 1000));
-          return fetchProfileWithRetry(user, retries - 1);
-        } else {
-          throw error;
-        }
-      }
-      
-      const profileData = data as Profile;
-      return {
-        ...profileData,
-        permissions: profileData.permissions || []
-      };
-
-    } catch (error: any) {
-      console.error('Erro fatal ao buscar perfil:', error);
-      return null;
+      if (error) throw error;
+      setProfile(data as Profile);
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error);
     }
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-    
-    // Inicia carregando
-    setLoading(true);
-    
-    // Recuperar sessão inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setSession(session);
-      if (session?.user) {
-        fetchProfileWithRetry(session.user).then(p => {
-          if (!mounted) return;
-          setProfile(p);
-          setLoading(false);
-        });
-      } else {
-        setLoading(false);
-      }
-    });
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut();
+    window.localStorage.removeItem('patiolog-auth-token-v2');
+    setSession(null);
+    setProfile(null);
+    setLoading(false);
+    window.location.href = '/'; 
+  }, []);
 
-    const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
-      async (event: string, session: any) => {
-        if (!mounted) return;
-        
-        // CRITICAL: Set loading to true immediately when auth state changes 
-        // to prevent flickering the "Profile not found" screen.
-        setLoading(true);
-        
-        setSession(session);
-        if (session?.user) {
-          const userProfile = await fetchProfileWithRetry(session.user);
-          if (mounted) {
-            setProfile(userProfile);
-            setLoading(false);
+  useEffect(() => {
+    // 1. Verificar sessão existente imediatamente (Persistência)
+    const checkSession = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession) {
+        setSession(currentSession);
+        await fetchProfile(currentSession.user.id);
+      }
+      setLoading(false);
+    };
+
+    checkSession();
+
+    // 2. Ouvir mudanças (Login/Logout/Refresh de Token)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setSession(currentSession);
+          if (currentSession?.user && !profile) {
+            await fetchProfile(currentSession.user.id);
           }
-        } else {
+          setLoading(false);
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
           setProfile(null);
           setLoading(false);
         }
       }
     );
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [fetchProfileWithRetry]);
+    return () => subscription.unsubscribe();
+  }, [fetchProfile, profile]);
 
-  const signOut = async () => {
-    try {
-      await (supabase.auth as any).signOut();
-      setSession(null);
-      setProfile(null);
-      window.localStorage.removeItem('patiolog-session-v1');
-    } catch (error) {
-      console.error("Erro ao realizar logout:", error);
-      setSession(null);
-      setProfile(null);
-    }
+  return { 
+    session, 
+    user: session?.user ?? null, 
+    profile, 
+    loading, 
+    signOut: handleLogout 
   };
-
-  return { session, user: session?.user ?? null, profile, loading, signOut };
 }

@@ -98,15 +98,21 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
     const uploadNewImages = async (placa: string): Promise<string[]> => {
         const uploadedUrls: string[] = [];
         for (const file of selectedFiles) {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            const { error: uploadError } = await supabase.storage.from('veiculos_fotos').upload(fileName, file);
-            if (uploadError) {
-                console.error("Erro no upload:", uploadError);
-                continue;
+            try {
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                const { error: uploadError } = await supabase.storage.from('veiculos_fotos').upload(fileName, file);
+                
+                if (uploadError) {
+                    console.error("Erro no upload:", uploadError);
+                    throw new Error(`Erro no upload da foto: ${uploadError.message}`);
+                }
+                
+                const { data: { publicUrl } } = supabase.storage.from('veiculos_fotos').getPublicUrl(fileName);
+                uploadedUrls.push(publicUrl);
+            } catch (err: any) {
+                throw err;
             }
-            const { data: { publicUrl } } = supabase.storage.from('veiculos_fotos').getPublicUrl(fileName);
-            uploadedUrls.push(publicUrl);
         }
         return uploadedUrls;
     };
@@ -119,6 +125,11 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
 
         try {
             const placaFormatada = formData.placa.toUpperCase().trim();
+            
+            // Validação preventiva do Ano para evitar NaN
+            const anoInt = formData.ano ? parseInt(formData.ano, 10) : null;
+            const anoValido = (anoInt !== null && !isNaN(anoInt)) ? anoInt : null;
+
             const newUploadedUrls = await uploadNewImages(placaFormatada);
             const finalPhotoUrls = [...existingPhotos, ...newUploadedUrls];
 
@@ -126,19 +137,19 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
                 .from('veiculos')
                 .update({
                     placa: placaFormatada,
-                    modelo: formData.modelo,
-                    cor: formData.cor,
-                    ano: formData.ano ? parseInt(formData.ano, 10) : null,
-                    chassi: formData.chassi,
-                    renavam: formData.renavam,
-                    observacoes: formData.observacoes,
-                    proprietario_nome: formData.proprietarioNome,
-                    proprietario_telefone: formData.proprietarioTelefone,
-                    proprietario_cpf: formData.proprietarioCpf,
-                    proprietario_cep: formData.proprietarioCep,
-                    proprietario_rua: formData.proprietarioRua,
-                    proprietario_bairro: formData.proprietarioBairro,
-                    proprietario_numero: formData.proprietarioNumero,
+                    modelo: formData.modelo || null,
+                    cor: formData.cor || null,
+                    ano: anoValido,
+                    chassi: formData.chassi || null,
+                    renavam: formData.renavam || null,
+                    observacoes: formData.observacoes || null,
+                    proprietario_nome: formData.proprietarioNome || null,
+                    proprietario_telefone: formData.proprietarioTelefone || null,
+                    proprietario_cpf: formData.proprietarioCpf || null,
+                    proprietario_cep: formData.proprietarioCep || null,
+                    proprietario_rua: formData.proprietarioRua || null,
+                    proprietario_bairro: formData.proprietarioBairro || null,
+                    proprietario_numero: formData.proprietarioNumero || null,
                     fotos_avaria_url: finalPhotoUrls
                 })
                 .eq('id', vehicle.id);
@@ -147,7 +158,8 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
             onSave();
             onClose();
         } catch (err: any) {
-            setError(`Erro ao salvar: ${err.message}`);
+            console.error("Erro ao salvar veículo:", err);
+            setError(`Erro ao salvar: ${err.message || 'Verifique sua conexão.'}`);
         } finally {
             setLoading(false);
         }

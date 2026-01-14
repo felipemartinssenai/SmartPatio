@@ -84,23 +84,27 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
     const uploadedUrls: string[] = [];
     
     for (const file of selectedFiles) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        
-        const { data, error: uploadError } = await supabase.storage
-            .from('veiculos_fotos')
-            .upload(fileName, file);
-        
-        if (uploadError) {
-            console.error('Erro no upload de foto:', uploadError);
-            continue;
-        }
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            
+            const { data, error: uploadError } = await supabase.storage
+                .from('veiculos_fotos')
+                .upload(fileName, file);
+            
+            if (uploadError) {
+                console.error('Erro no upload de foto:', uploadError);
+                throw new Error(`Erro ao subir foto: ${uploadError.message}. Verifique se o bucket 'veiculos_fotos' existe.`);
+            }
 
-        const { data: { publicUrl } } = supabase.storage
-            .from('veiculos_fotos')
-            .getPublicUrl(fileName);
-        
-        uploadedUrls.push(publicUrl);
+            const { data: { publicUrl } } = supabase.storage
+                .from('veiculos_fotos')
+                .getPublicUrl(fileName);
+            
+            uploadedUrls.push(publicUrl);
+        } catch (err: any) {
+            throw err;
+        }
     }
     
     return uploadedUrls;
@@ -119,6 +123,11 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
 
     try {
         const placaFormatada = formData.placa.toUpperCase().trim();
+        
+        // Validação preventiva do Ano para evitar NaN no RPC
+        const anoInt = formData.ano ? parseInt(formData.ano, 10) : null;
+        const anoValido = (anoInt !== null && !isNaN(anoInt)) ? anoInt : null;
+
         let fotoUrls: string[] = [];
         
         // 1. Upload das Fotos se houverem
@@ -128,7 +137,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
 
         // 2. Chamada RPC com URLs das fotos
         const payload = {
-          p_ano: formData.ano ? parseInt(formData.ano, 10) : null,
+          p_ano: anoValido,
           p_chassi: formData.chassi || null,
           p_cor: formData.cor || null,
           p_modelo: formData.modelo || null,
@@ -156,7 +165,7 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
         setTimeout(() => setCurrentPage('patio'), 2000);
     } catch (err: any) {
         console.error('Erro na solicitação:', err);
-        setError(`Erro ao salvar: ${err.message}`);
+        setError(`Erro ao salvar: ${err.message || 'Verifique sua conexão e configurações.'}`);
     } finally {
         setLoading(false);
     }

@@ -104,7 +104,7 @@ const Settings: React.FC = () => {
                                 placeholder="$asaas_access_token..."
                                 className="w-full bg-gray-900 border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                             />
-                            <p className="text-[10px] text-gray-600 font-bold uppercase mt-1">Obtenha sua chave no painel do Asaas em Configurações de Conta > API</p>
+                            <p className="text-[10px] text-gray-600 font-bold uppercase mt-1">Obtenha sua chave no painel do Asaas em Configurações de Conta &gt; API</p>
                         </div>
                     </div>
 

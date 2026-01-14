@@ -4,12 +4,10 @@ import { supabase } from '../services/supabase';
 import { Profile } from '../types';
 
 export function useAuth() {
-  // Use any for session to bypass problematic type exports in this environment
   const [session, setSession] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Use any for user parameter to avoid missing type export issues
   const fetchProfileWithRetry = useCallback(async (user: any, retries = 5): Promise<Profile | null> => {
     try {
       const { data, error } = await supabase
@@ -19,18 +17,15 @@ export function useAuth() {
         .single();
       
       if (error) {
-        // Erro PGRST116: Nenhuma linha encontrada.
-        // Tentamos novamente para dar tempo ao Trigger do Postgres.
         if (error.code === 'PGRST116' && retries > 0) {
           console.warn(`Aguardando perfil ser criado... (${retries} tentativas restantes)`);
-          await new Promise(res => setTimeout(res, 1000)); // Espera 1 segundo
+          await new Promise(res => setTimeout(res, 1000));
           return fetchProfileWithRetry(user, retries - 1);
         } else {
           throw error;
         }
       }
       
-      // Sanitização defensiva: Garante que permissions seja um array
       const profileData = data as Profile;
       return {
         ...profileData,
@@ -44,30 +39,65 @@ export function useAuth() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+    
+    // Inicia carregando
     setLoading(true);
-    // Cast to any to bypass the error where onAuthStateChange is reported as missing on SupabaseAuthClient
+    
+    // Recuperar sessão inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      setSession(session);
+      if (session?.user) {
+        fetchProfileWithRetry(session.user).then(p => {
+          if (!mounted) return;
+          setProfile(p);
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    });
+
     const { data: { subscription } } = (supabase.auth as any).onAuthStateChange(
       async (event: string, session: any) => {
+        if (!mounted) return;
+        
+        // CRITICAL: Set loading to true immediately when auth state changes 
+        // to prevent flickering the "Profile not found" screen.
+        setLoading(true);
+        
         setSession(session);
         if (session?.user) {
           const userProfile = await fetchProfileWithRetry(session.user);
-          setProfile(userProfile);
+          if (mounted) {
+            setProfile(userProfile);
+            setLoading(false);
+          }
         } else {
           setProfile(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [fetchProfileWithRetry]);
 
   const signOut = async () => {
-    // Cast to any to bypass the error where signOut is reported as missing on SupabaseAuthClient
-    await (supabase.auth as any).signOut();
-    window.location.reload(); // Limpa estados residuais
+    try {
+      await (supabase.auth as any).signOut();
+      setSession(null);
+      setProfile(null);
+      window.localStorage.removeItem('patiolog-session-v1');
+    } catch (error) {
+      console.error("Erro ao realizar logout:", error);
+      setSession(null);
+      setProfile(null);
+    }
   };
 
   return { session, user: session?.user ?? null, profile, loading, signOut };

@@ -6,7 +6,7 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v10.0 (Tracking Realtime)
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v11.0 (Suporte a Histórico de Placas)
 -- 1. TABELA DE CONFIGURAÇÕES SISTEMAS
 CREATE TABLE IF NOT EXISTS public.configuracoes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     last_seen timestamptz
 );
 
--- 4. TABELA DE VEÍCULOS
+-- 4. TABELA DE VEÍCULOS (Removendo restrição de unicidade da placa)
 CREATE TABLE IF NOT EXISTS public.veiculos (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     placa text NOT NULL,
@@ -67,6 +67,11 @@ CREATE TABLE IF NOT EXISTS public.veiculos (
     observacoes text,
     created_at timestamptz DEFAULT now()
 );
+
+-- CORREÇÃO v11.0: Remover restrição de unicidade para permitir que a mesma placa entre várias vezes no histórico
+ALTER TABLE public.veiculos DROP CONSTRAINT IF EXISTS veiculos_placa_key;
+DROP INDEX IF EXISTS veiculos_placa_key;
+DROP INDEX IF EXISTS veiculos_placa_idx;
 
 -- 5. TABELA DE FORMAS DE PAGAMENTO
 CREATE TABLE IF NOT EXISTS public.formas_pagamento (
@@ -133,19 +138,19 @@ DROP POLICY IF EXISTS "Acesso total" ON public.formas_pagamento; CREATE POLICY "
 DROP POLICY IF EXISTS "Acesso total" ON public.configuracoes; CREATE POLICY "Acesso total" ON public.configuracoes FOR ALL USING (true);`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v10.0');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v11.0');
   if (!isOpen) return null;
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v10.0'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v11.0'), 2000);
   };
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[5000] p-4" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl font-bold text-white mb-4">Configuração v10.0 (Tracking)</h2>
+        <h2 className="text-xl font-bold text-white mb-4">Configuração v11.0 (Histórico)</h2>
         <div className="space-y-4 mb-4 overflow-y-auto custom-scrollbar pr-2">
-            <p className="text-xs text-blue-200">Este script adiciona suporte a rastreamento GPS em tempo real para motoristas e veículos.</p>
+            <p className="text-xs text-blue-200">Este script permite que uma mesma placa seja guinchada várias vezes, mantendo o histórico de cada entrada/saída.</p>
             <pre className="bg-black p-4 rounded-xl overflow-auto text-[10px] font-mono text-green-400 border border-gray-700"><code>{SQL_SCRIPT}</code></pre>
         </div>
         <div className="flex justify-end gap-3"><button onClick={onClose} className="px-6 py-2.5 bg-gray-700 rounded-xl text-sm font-bold">Fechar</button><button onClick={handleCopy} className="px-6 py-2.5 bg-blue-600 rounded-xl font-black text-sm">{copyButtonText}</button></div>

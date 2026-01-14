@@ -1,30 +1,19 @@
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { Profile } from '../types';
 
 export function useLocationTracking(profile: Profile | null) {
   const watchId = useRef<number | null>(null);
   const lastUpdate = useRef<number>(0);
+  const [gpsStatus, setGpsStatus] = useState<'searching' | 'active' | 'denied' | 'error'>('searching');
 
   useEffect(() => {
-    // Apenas motoristas logados rastreiam
     if (!profile || profile.cargo !== 'motorista' || !('geolocation' in navigator)) {
-      if (profile?.cargo === 'motorista') {
-          console.warn('[GPS] Geolocalização não suportada ou perfil inválido.');
-      }
       return;
     }
 
-    const updateLocation = async (position: GeolocationPosition) => {
-      const now = Date.now();
-      // Evita updates excessivos (mínimo 10 segundos entre cada um para maior precisão inicial)
-      if (now - lastUpdate.current < 10000) return;
-
-      const { latitude, longitude, accuracy } = position.coords;
-      
-      console.log(`[GPS] Enviando posição: ${latitude}, ${longitude} (Precisão: ${accuracy}m)`);
-      
+    const sendPositionToSupabase = async (latitude: number, longitude: number) => {
       try {
         const { error } = await supabase
           .from('profiles')
@@ -35,43 +24,52 @@ export function useLocationTracking(profile: Profile | null) {
           })
           .eq('id', profile.id);
 
-        if (error) {
-            console.error('[GPS] Erro ao atualizar no banco:', error.message);
-        } else {
-            lastUpdate.current = now;
-            console.log('[GPS] Sincronizado com sucesso.');
+        if (!error) {
+          lastUpdate.current = Date.now();
+          setGpsStatus('active');
         }
       } catch (err) {
         console.error('[GPS] Erro crítico:', err);
+        setGpsStatus('error');
       }
     };
 
-    const handleError = (error: GeolocationPositionError) => {
-      const msgs = {
-          1: "Permissão negada pelo usuário.",
-          2: "Posição indisponível (GPS desligado?).",
-          3: "Tempo de busca esgotado."
-      };
-      console.warn('[GPS] Erro:', msgs[error.code as keyof typeof msgs] || error.message);
+    const updateLocation = (position: GeolocationPosition) => {
+      const now = Date.now();
+      // Envia atualizações a cada 10 segundos para economizar bateria e banda
+      if (now - lastUpdate.current < 10000) return;
+      sendPositionToSupabase(position.coords.latitude, position.coords.longitude);
     };
 
-    // Inicia monitoramento
-    console.log('[GPS] Iniciando rastreamento em tempo real...');
+    const handleError = (error: GeolocationPositionError) => {
+      if (error.code === 1) setGpsStatus('denied');
+      else setGpsStatus('error');
+    };
+
+    // 1. Forçar uma captura imediata ao entrar (Wake up)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => sendPositionToSupabase(pos.coords.latitude, pos.coords.longitude),
+      handleError,
+      { enableHighAccuracy: true }
+    );
+
+    // 2. Iniciar monitoramento contínuo
     watchId.current = navigator.geolocation.watchPosition(
       updateLocation,
       handleError,
       {
         enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 0, // Forçar pegar a posição mais atual
+        timeout: 20000,
+        maximumAge: 0,
       }
     );
 
     return () => {
       if (watchId.current !== null) {
-        console.log('[GPS] Parando rastreamento.');
         navigator.geolocation.clearWatch(watchId.current);
       }
     };
   }, [profile]);
+
+  return { gpsStatus };
 }

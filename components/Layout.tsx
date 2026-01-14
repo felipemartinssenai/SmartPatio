@@ -11,6 +11,7 @@ interface LayoutProps {
   setCurrentPage: (page: Page) => void;
 }
 
+// Added 'payment_methods' to satisfy Record<Page, string> requirement
 const PAGE_TITLES: Record<Page, string> = {
   dashboard: 'Dashboard Operacional',
   collections: 'Minhas Coletas',
@@ -19,6 +20,7 @@ const PAGE_TITLES: Record<Page, string> = {
   patio: 'Gerenciamento do Pátio',
   fechamentos: 'Relatório de Fechamentos',
   user_management: 'Gestão de Usuários',
+  payment_methods: 'Formas de Pagamento',
 };
 
 

@@ -11,7 +11,8 @@ export type Page =
   | 'solicitacao_coleta' 
   | 'patio' 
   | 'fechamentos'
-  | 'user_management';
+  | 'user_management'
+  | 'payment_methods'; // Nova página
 
 export interface Profile {
   id: string;
@@ -19,6 +20,13 @@ export interface Profile {
   avatar_url?: string;
   cargo: UserRole;
   permissions: Page[]; // Array de strings com as chaves das páginas permitidas
+}
+
+export interface FormaPagamento {
+  id: string;
+  nome: string;
+  ativa: boolean;
+  created_at?: string;
 }
 
 export interface Veiculo {

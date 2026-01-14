@@ -140,18 +140,18 @@ const Patio: React.FC = () => {
         setVehicleForCheckIn(null);
     };
 
-    const handleConfirmCheckout = async (movimentacao: Movimentacao, totalPago: number) => {
+    const handleConfirmCheckout = async (movimentacao: Movimentacao, totalPago: number, formaPagamento: string) => {
         const dataSaida = new Date().toISOString();
 
         await supabase
             .from('movimentacoes')
-            .update({ data_saida: dataSaida, total_pago: totalPago, forma_pagamento: 'Checkout Pátio' })
+            .update({ data_saida: dataSaida, total_pago: totalPago, forma_pagamento: formaPagamento })
             .eq('id', movimentacao.id);
 
         await supabase.from('financeiro').insert({
                 tipo: 'entrada',
                 valor: totalPago,
-                descricao: `Checkout Pátio - Placa ${vehicleForCheckout?.placa}`,
+                descricao: `Checkout Pátio (${formaPagamento}) - Placa ${vehicleForCheckout?.placa}`,
                 movimentacao_id: movimentacao.id,
                 data: dataSaida,
             });

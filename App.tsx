@@ -10,6 +10,7 @@ import SolicitacaoColeta from './components/SolicitacaoColeta';
 import Patio from './components/Patio';
 import Fechamentos from './components/Fechamentos';
 import UserManagement from './components/UserManagement';
+import PaymentMethodManagement from './components/PaymentMethodManagement';
 import SqlSetupModal from './components/SqlSetupModal';
 import { Page } from './types';
 
@@ -122,6 +123,8 @@ const App: React.FC = () => {
         return <Patio />;
       case 'user_management':
         return <UserManagement />;
+      case 'payment_methods':
+        return <PaymentMethodManagement />;
       default:
         return <AdminDashboard />;
     }

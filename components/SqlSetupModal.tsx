@@ -6,7 +6,7 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v7.3 (Utilizando Bucket 'avarias')
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v8.0 (Incluindo Formas de Pagamento)
 -- ⚠️ INSTRUÇÃO OBRIGATÓRIA:
 -- Além deste script, verifique se o bucket existe no painel do Supabase:
 -- 1. Vá em Storage
@@ -61,7 +61,20 @@ CREATE TABLE IF NOT EXISTS public.veiculos (
     created_at timestamptz DEFAULT now()
 );
 
--- 4. FUNÇÃO RPC PARA CRIAR COLETA (ATUALIZADA v7.3)
+-- 4. TABELA DE FORMAS DE PAGAMENTO
+CREATE TABLE IF NOT EXISTS public.formas_pagamento (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    nome text NOT NULL UNIQUE,
+    ativa boolean DEFAULT true,
+    created_at timestamptz DEFAULT now()
+);
+
+-- Inserir formas padrão se não existirem
+INSERT INTO public.formas_pagamento (nome) 
+VALUES ('Dinheiro'), ('Pix'), ('Cartão de Crédito'), ('Cartão de Débito'), ('Transferência')
+ON CONFLICT (nome) DO NOTHING;
+
+-- 5. FUNÇÃO RPC PARA CRIAR COLETA
 CREATE OR REPLACE FUNCTION public.create_new_vehicle_collection(
     p_placa text,
     p_modelo text DEFAULT NULL,
@@ -94,7 +107,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 5. MOVIMENTAÇÕES E FINANCEIRO
+-- 6. MOVIMENTAÇÕES E FINANCEIRO
 CREATE TABLE IF NOT EXISTS public.movimentacoes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     veiculo_id uuid REFERENCES public.veiculos(id),
@@ -115,7 +128,7 @@ CREATE TABLE IF NOT EXISTS public.financeiro (
     movimentacao_id uuid REFERENCES public.movimentacoes(id)
 );
 
--- 6. TRIGGER DE AUTOMATIZAÇÃO DE PERFIL
+-- 7. TRIGGER DE AUTOMATIZAÇÃO DE PERFIL
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -129,7 +142,7 @@ BEGIN
     END,
     CASE 
         WHEN new.email = 'felipemartinssenai@gmail.com' THEN 
-            ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management']::text[]
+            ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management', 'payment_methods']::text[]
         ELSE ARRAY['collections']::text[]
     END
   ) ON CONFLICT (id) DO UPDATE SET
@@ -144,17 +157,18 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
--- 7. CONFIGURAÇÃO FORÇADA DO SEU USUÁRIO ADMIN
+-- 8. CONFIGURAÇÃO FORÇADA DO SEU USUÁRIO ADMIN
 UPDATE public.profiles 
 SET cargo = 'admin', 
-    permissions = ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management']::text[]
+    permissions = ARRAY['dashboard', 'collections', 'financials', 'solicitacao_coleta', 'patio', 'fechamentos', 'user_management', 'payment_methods']::text[]
 WHERE id IN (SELECT id FROM auth.users WHERE email = 'felipemartinssenai@gmail.com');
 
--- 8. POLÍTICAS DE SEGURANÇA (RLS)
+-- 9. POLÍTICAS DE SEGURANÇA (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.veiculos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.movimentacoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.financeiro ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.formas_pagamento ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Acesso total perfis" ON public.profiles;
 CREATE POLICY "Acesso total perfis" ON public.profiles FOR ALL USING (true);
@@ -166,17 +180,20 @@ DROP POLICY IF EXISTS "Acesso total movs" ON public.movimentacoes;
 CREATE POLICY "Acesso total movs" ON public.movimentacoes FOR ALL USING (auth.role() = 'authenticated');
 
 DROP POLICY IF EXISTS "Acesso total fin" ON public.financeiro;
-CREATE POLICY "Acesso total fin" ON public.financeiro FOR ALL USING (auth.role() = 'authenticated');`;
+CREATE POLICY "Acesso total fin" ON public.financeiro FOR ALL USING (auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Acesso total formas_pagamento" ON public.formas_pagamento;
+CREATE POLICY "Acesso total formas_pagamento" ON public.formas_pagamento FOR ALL USING (auth.role() = 'authenticated');`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v7.3 (Avarias)');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v8.0');
 
   if (!isOpen) return null;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v7.3 (Avarias)'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v8.0'), 2000);
   };
 
   return (
@@ -193,7 +210,6 @@ const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
         </div>
         
         <div className="space-y-4 mb-4 overflow-y-auto custom-scrollbar pr-2">
-            {/* Alerta Crítico sobre Storage */}
             <div className="bg-amber-500/10 border-2 border-amber-500/50 p-4 rounded-xl">
                 <h3 className="text-amber-400 font-bold flex items-center gap-2 mb-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>

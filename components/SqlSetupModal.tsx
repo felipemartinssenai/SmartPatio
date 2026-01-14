@@ -6,9 +6,9 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v12.0 (Realtime & Histórico)
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v13.0 (Opção C - Realtime Data-Driven)
 
--- 1. HABILITAR EXTENSÃO DE UUID
+-- 1. HABILITAR EXTENSÃO DE UUID E SEGURANÇA
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 2. TABELA DE CONFIGURAÇÕES SISTEMAS
@@ -34,7 +34,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 4. TABELA DE PERFIS (Com Tracking de Localização)
+-- 4. TABELA DE PERFIS (Motoristas e Localização)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text,
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     last_seen timestamptz
 );
 
--- 5. TABELA DE VEÍCULOS
+-- 5. TABELA DE VEÍCULOS (Com suporte a histórico de placas)
 CREATE TABLE IF NOT EXISTS public.veiculos (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     placa text NOT NULL,
@@ -110,10 +110,16 @@ CREATE TABLE IF NOT EXISTS public.financeiro (
     movimentacao_id uuid REFERENCES public.movimentacoes(id)
 );
 
--- 7. HABILITAR REALTIME (CRÍTICO PARA O MAPA)
--- Remove se já existir para evitar erro e recria a publicação
+-- 7. CONFIGURAÇÃO DA OPÇÃO C (REALTIME ORIENTADO A TABELAS)
+-- Isso garante que as mudanças no GPS e nos Veículos sejam transmitidas
+-- O REPLICA IDENTITY FULL envia o objeto completo no payload de mudança
+
+ALTER TABLE public.profiles REPLICA IDENTITY FULL;
+ALTER TABLE public.veiculos REPLICA IDENTITY FULL;
+
+-- Garante que a publicação existe e contém as tabelas necessárias
 DROP PUBLICATION IF EXISTS supabase_realtime;
-CREATE PUBLICATION supabase_realtime FOR TABLE public.profiles, public.veiculos;
+CREATE PUBLICATION supabase_realtime FOR TABLE public.profiles, public.veiculos, public.financeiro;
 
 -- 8. TRIGGER DE PERFIL AUTOMÁTICO
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -146,22 +152,22 @@ DROP POLICY IF EXISTS "Acesso total" ON public.formas_pagamento; CREATE POLICY "
 DROP POLICY IF EXISTS "Acesso total" ON public.configuracoes; CREATE POLICY "Acesso total" ON public.configuracoes FOR ALL USING (true);`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v12.0');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v13.0');
   if (!isOpen) return null;
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v12.0'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v13.0'), 2000);
   };
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[5000] p-4" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-white italic">PátioLog Setup <span className="text-blue-500">v12.0</span></h2>
-            <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] text-blue-400 font-black uppercase">Realtime Habilitado</div>
+            <h2 className="text-xl font-bold text-white italic">PátioLog Setup <span className="text-blue-500">v13.0</span></h2>
+            <div className="px-2 py-1 bg-green-500/10 border border-green-500/30 rounded text-[10px] text-green-400 font-black uppercase">Opção C Recomendada</div>
         </div>
         <div className="space-y-4 mb-4 overflow-y-auto custom-scrollbar pr-2">
-            <p className="text-xs text-blue-200">Este script ativa o <b>Supabase Realtime</b>. Sem ele, o mapa de motoristas não atualizará em tempo real.</p>
+            <p className="text-xs text-blue-200">Este script ativa o <b>Realtime orientado a tabelas</b>. As tabelas 'profiles' e 'veiculos' enviarão atualizações completas para o mapa instantaneamente.</p>
             <pre className="bg-black p-4 rounded-xl overflow-auto text-[10px] font-mono text-green-400 border border-gray-700"><code>{SQL_SCRIPT}</code></pre>
         </div>
         <div className="flex justify-end gap-3">

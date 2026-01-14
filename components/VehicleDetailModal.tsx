@@ -1,18 +1,79 @@
 
 import React, { useState } from 'react';
-import { Veiculo } from '../types';
+import { Veiculo, VehicleStatus } from '../types';
 
 interface VehicleDetailModalProps {
     vehicle: Veiculo | null;
     onClose: () => void;
 }
 
-const DetailRow: React.FC<{ label: string; value: string | number | undefined | null }> = ({ label, value }) => (
-    <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-700/50">
-        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{label}</p>
-        <p className="text-sm font-bold text-white leading-tight">{value || '---'}</p>
-    </div>
-);
+const STATUS_MAP: Record<VehicleStatus, string> = {
+    'aguardando_coleta': 'Aguardando Coleta',
+    'em_transito': 'Em Trânsito / Rota',
+    'no_patio': 'No Pátio',
+    'finalizado': 'Finalizado'
+};
+
+const DetailRow: React.FC<{ 
+    label: string; 
+    value: string | number | undefined | null; 
+    type?: 'address' | 'phone' | 'default' 
+}> = ({ label, value, type = 'default' }) => {
+    
+    const handleAction = () => {
+        if (!value) return;
+
+        if (type === 'address') {
+            const encodedAddress = encodeURIComponent(String(value));
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedAddress}`, '_blank');
+        }
+
+        if (type === 'phone') {
+            const cleanNumber = String(value).replace(/\D/g, '');
+            // Se o número não tem DDI, assume Brasil (55)
+            const waNumber = cleanNumber.length <= 11 ? `55${cleanNumber}` : cleanNumber;
+            window.open(`https://wa.me/${waNumber}`, '_blank');
+        }
+    };
+
+    const isInteractive = type !== 'default' && value;
+
+    return (
+        <div 
+            className={`bg-gray-900/50 p-4 rounded-2xl border transition-all ${
+                isInteractive 
+                ? 'hover:bg-blue-600/10 cursor-pointer border-blue-500/30 active:scale-[0.98]' 
+                : 'border-gray-700/50'
+            }`}
+            onClick={isInteractive ? handleAction : undefined}
+        >
+            <div className="flex justify-between items-start mb-1">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{label}</p>
+                {type === 'address' && value && (
+                    <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                    </svg>
+                )}
+                {type === 'phone' && value && (
+                    <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                )}
+            </div>
+            <p className={`text-sm font-bold leading-tight ${
+                type === 'address' ? 'text-blue-400' : 
+                type === 'phone' ? 'text-green-400' : 
+                'text-white'
+            }`}>
+                {value || '---'}
+                {isInteractive && (
+                    <span className="block text-[8px] mt-1 opacity-70 font-black uppercase tracking-tighter">
+                        {type === 'address' ? 'Toque para abrir GPS' : 'Toque para abrir WhatsApp'}
+                    </span>
+                )}
+            </p>
+        </div>
+    );
+};
 
 const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClose }) => {
     const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -24,8 +85,15 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
     const handleOpenMaps = () => {
         if (vehicle.lat && vehicle.lng) {
             window.open(`https://www.google.com/maps/dir/?api=1&destination=${vehicle.lat},${vehicle.lng}`, '_blank');
+        } else {
+            const fullAddress = `${vehicle.proprietario_rua || ''}, ${vehicle.proprietario_numero || ''} - ${vehicle.proprietario_bairro || ''}, ${vehicle.proprietario_cep || ''}`;
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(fullAddress)}`, '_blank');
         }
     };
+
+    const fullAddress = vehicle.proprietario_rua 
+        ? `${vehicle.proprietario_rua}, ${vehicle.proprietario_numero || 'S/N'} - ${vehicle.proprietario_bairro || ''} (${vehicle.proprietario_cep || 'S/ CEP'})`
+        : null;
 
     return (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-sm flex items-center justify-center z-[5000] p-4" onClick={onClose}>
@@ -41,7 +109,7 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
                         </span>
                         <div>
                             <h2 className="text-lg font-black text-white uppercase tracking-tighter">Detalhes da Coleta</h2>
-                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">Protocolo: {vehicle.id.slice(0, 8)}</p>
+                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">ID: {vehicle.id.slice(0, 8)}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded-full transition-colors text-gray-400">
@@ -55,7 +123,7 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
                     {/* Fotos */}
                     {photos.length > 0 && (
                         <div className="space-y-4">
-                            <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] px-1">Fotos do Estado do Veículo</h3>
+                            <h3 className="text-xs font-black text-gray-500 uppercase tracking-[0.2em] px-1">Fotos do Veículo</h3>
                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                                 {photos.map((url, idx) => (
                                     <div 
@@ -73,7 +141,7 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
                     {/* Dados do Veículo */}
                     <div className="space-y-4">
                         <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] px-1 flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg>
                             Informações do Veículo
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -82,7 +150,7 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
                             <DetailRow label="Ano" value={vehicle.ano} />
                             <DetailRow label="Chassi" value={vehicle.chassi} />
                             <DetailRow label="Renavam" value={vehicle.renavam} />
-                            <DetailRow label="Status Atual" value={vehicle.status} />
+                            <DetailRow label="Status Atual" value={STATUS_MAP[vehicle.status] || vehicle.status} />
                         </div>
                     </div>
 
@@ -93,12 +161,13 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
                             Proprietário e Localização
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <DetailRow label="Nome do Proprietário" value={vehicle.proprietario_nome} />
-                            <DetailRow label="Telefone de Contato" value={vehicle.proprietario_telefone} />
+                            <DetailRow label="Proprietário" value={vehicle.proprietario_nome} />
+                            <DetailRow label="Telefone de Contato" value={vehicle.proprietario_telefone} type="phone" />
                             <div className="md:col-span-2">
                                 <DetailRow 
                                     label="Endereço de Coleta" 
-                                    value={`${vehicle.proprietario_rua || ''}, ${vehicle.proprietario_numero || ''} - ${vehicle.proprietario_bairro || ''} (${vehicle.proprietario_cep || 'S/ CEP'})`} 
+                                    value={fullAddress}
+                                    type="address"
                                 />
                             </div>
                         </div>
@@ -123,22 +192,20 @@ const VehicleDetailModal: React.FC<VehicleDetailModalProps> = ({ vehicle, onClos
                     >
                         Voltar para Lista
                     </button>
-                    {(vehicle.lat && vehicle.lng) && (
-                        <button 
-                            onClick={handleOpenMaps}
-                            className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black uppercase tracking-widest text-[10px] transition-all shadow-xl shadow-blue-900/40 flex items-center justify-center gap-2 active:scale-95"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                            Abrir no GPS
-                        </button>
-                    )}
+                    <button 
+                        onClick={handleOpenMaps}
+                        className="flex-1 py-4 bg-blue-600 hover:bg-blue-500 rounded-2xl text-white font-black uppercase tracking-widest text-[10px] transition-all shadow-xl shadow-blue-900/40 flex items-center justify-center gap-2 active:scale-95"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Navegar via GPS
+                    </button>
                 </div>
             </div>
 
             {/* Visualizador de Imagem Full */}
             {viewerIndex !== null && (
                 <div className="fixed inset-0 z-[6000] bg-black/95 flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => setViewerIndex(null)}>
-                    <img src={photos[viewerIndex]} alt="Full" className="max-w-full max-h-full object-contain rounded-lg" />
+                    <img src={photos[viewerIndex]} alt="Full" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
                     <button className="absolute top-6 right-6 p-4 text-white hover:bg-white/10 rounded-full transition-colors">
                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>

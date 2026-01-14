@@ -6,8 +6,12 @@ interface SqlSetupModalProps {
   onClose: () => void;
 }
 
-const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v11.0 (Suporte a Histórico de Placas)
--- 1. TABELA DE CONFIGURAÇÕES SISTEMAS
+const SQL_SCRIPT = `-- SCRIPT DEFINITIVO PÁTIOLOG v12.0 (Realtime & Histórico)
+
+-- 1. HABILITAR EXTENSÃO DE UUID
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- 2. TABELA DE CONFIGURAÇÕES SISTEMAS
 CREATE TABLE IF NOT EXISTS public.configuracoes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     chave text NOT NULL UNIQUE,
@@ -20,7 +24,7 @@ INSERT INTO public.configuracoes (chave, valor)
 VALUES ('asaas_config', '{"api_key": "", "environment": "sandbox"}'::jsonb)
 ON CONFLICT (chave) DO NOTHING;
 
--- 2. TIPOS E ENUMS
+-- 3. TIPOS E ENUMS
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
         CREATE TYPE public.user_role AS ENUM ('admin', 'operador', 'motorista');
@@ -30,7 +34,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- 3. TABELA DE PERFIS (Com Tracking)
+-- 4. TABELA DE PERFIS (Com Tracking de Localização)
 CREATE TABLE IF NOT EXISTS public.profiles (
     id uuid NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name text,
@@ -42,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     last_seen timestamptz
 );
 
--- 4. TABELA DE VEÍCULOS (Removendo restrição de unicidade da placa)
+-- 5. TABELA DE VEÍCULOS
 CREATE TABLE IF NOT EXISTS public.veiculos (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     placa text NOT NULL,
@@ -68,12 +72,12 @@ CREATE TABLE IF NOT EXISTS public.veiculos (
     created_at timestamptz DEFAULT now()
 );
 
--- CORREÇÃO v11.0: Remover restrição de unicidade para permitir que a mesma placa entre várias vezes no histórico
+-- REMOVER UNICIDADE DA PLACA PARA HISTÓRICO (v11+)
 ALTER TABLE public.veiculos DROP CONSTRAINT IF EXISTS veiculos_placa_key;
 DROP INDEX IF EXISTS veiculos_placa_key;
 DROP INDEX IF EXISTS veiculos_placa_idx;
 
--- 5. TABELA DE FORMAS DE PAGAMENTO
+-- 6. FINANCEIRO E MOVIMENTAÇÕES
 CREATE TABLE IF NOT EXISTS public.formas_pagamento (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     nome text NOT NULL UNIQUE,
@@ -85,7 +89,6 @@ INSERT INTO public.formas_pagamento (nome)
 VALUES ('Dinheiro'), ('Pix'), ('Cartão de Crédito'), ('Cartão de Débito'), ('Boleto')
 ON CONFLICT (nome) DO NOTHING;
 
--- 6. MOVIMENTAÇÕES E FINANCEIRO
 CREATE TABLE IF NOT EXISTS public.movimentacoes (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     veiculo_id uuid REFERENCES public.veiculos(id),
@@ -107,7 +110,12 @@ CREATE TABLE IF NOT EXISTS public.financeiro (
     movimentacao_id uuid REFERENCES public.movimentacoes(id)
 );
 
--- 7. TRIGGER DE PERFIL
+-- 7. HABILITAR REALTIME (CRÍTICO PARA O MAPA)
+-- Remove se já existir para evitar erro e recria a publicação
+DROP PUBLICATION IF EXISTS supabase_realtime;
+CREATE PUBLICATION supabase_realtime FOR TABLE public.profiles, public.veiculos;
+
+-- 8. TRIGGER DE PERFIL AUTOMÁTICO
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
@@ -122,7 +130,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 8. POLÍTICAS
+-- 9. POLÍTICAS DE SEGURANÇA (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.veiculos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.movimentacoes ENABLE ROW LEVEL SECURITY;
@@ -138,22 +146,28 @@ DROP POLICY IF EXISTS "Acesso total" ON public.formas_pagamento; CREATE POLICY "
 DROP POLICY IF EXISTS "Acesso total" ON public.configuracoes; CREATE POLICY "Acesso total" ON public.configuracoes FOR ALL USING (true);`;
 
 const SqlSetupModal: React.FC<SqlSetupModalProps> = ({ isOpen, onClose }) => {
-  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v11.0');
+  const [copyButtonText, setCopyButtonText] = useState('Copiar Script v12.0');
   if (!isOpen) return null;
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SCRIPT);
     setCopyButtonText('Copiado!');
-    setTimeout(() => setCopyButtonText('Copiar Script v11.0'), 2000);
+    setTimeout(() => setCopyButtonText('Copiar Script v12.0'), 2000);
   };
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[5000] p-4" onClick={onClose}>
       <div className="bg-gray-800 rounded-lg p-6 w-full max-w-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl font-bold text-white mb-4">Configuração v11.0 (Histórico)</h2>
+        <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-white italic">PátioLog Setup <span className="text-blue-500">v12.0</span></h2>
+            <div className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[10px] text-blue-400 font-black uppercase">Realtime Habilitado</div>
+        </div>
         <div className="space-y-4 mb-4 overflow-y-auto custom-scrollbar pr-2">
-            <p className="text-xs text-blue-200">Este script permite que uma mesma placa seja guinchada várias vezes, mantendo o histórico de cada entrada/saída.</p>
+            <p className="text-xs text-blue-200">Este script ativa o <b>Supabase Realtime</b>. Sem ele, o mapa de motoristas não atualizará em tempo real.</p>
             <pre className="bg-black p-4 rounded-xl overflow-auto text-[10px] font-mono text-green-400 border border-gray-700"><code>{SQL_SCRIPT}</code></pre>
         </div>
-        <div className="flex justify-end gap-3"><button onClick={onClose} className="px-6 py-2.5 bg-gray-700 rounded-xl text-sm font-bold">Fechar</button><button onClick={handleCopy} className="px-6 py-2.5 bg-blue-600 rounded-xl font-black text-sm">{copyButtonText}</button></div>
+        <div className="flex justify-end gap-3">
+            <button onClick={onClose} className="px-6 py-2.5 bg-gray-700 rounded-xl text-sm font-bold">Fechar</button>
+            <button onClick={handleCopy} className="px-6 py-2.5 bg-blue-600 rounded-xl font-black text-sm">{copyButtonText}</button>
+        </div>
       </div>
     </div>
   );

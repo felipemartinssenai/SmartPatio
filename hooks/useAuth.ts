@@ -12,8 +12,6 @@ export function useAuth() {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      // Não resetamos o loading para true se já tivermos um perfil, 
-      // para evitar que a tela de loading apareça em atualizações de fundo
       if (!profile) setLoading(true);
       
       const { data, error: profileError } = await supabase
@@ -24,7 +22,6 @@ export function useAuth() {
       
       if (profileError) {
         console.warn('Falha temporária ao sincronizar perfil:', profileError.message);
-        // Se já temos um perfil no estado, não o removemos por erro de conexão
         if (!profile) setError(profileError.message);
       } else if (data) {
         setProfile(data as Profile);
@@ -38,18 +35,20 @@ export function useAuth() {
   }, [profile]);
 
   const handleLogout = useCallback(async () => {
-    setLoading(true);
+    // 1. Limpa o estado local IMEDIATAMENTE para a UI reagir
+    setSession(null);
+    setProfile(null);
+    setLoading(false);
+    
     try {
+      // 2. Tenta deslogar no servidor em segundo plano
       await supabase.auth.signOut();
+      // 3. Limpa caches físicos
       window.localStorage.removeItem('patiolog-auth-v2-stable');
-      setSession(null);
-      setProfile(null);
-      window.location.href = '/'; 
+      window.localStorage.removeItem('last_page');
     } catch (e) {
+      console.warn('Erro ao limpar sessão no servidor, limpando localmente apenas.');
       window.localStorage.clear();
-      window.location.reload();
-    } finally {
-      setLoading(false);
     }
   }, []);
 

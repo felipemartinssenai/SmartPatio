@@ -146,8 +146,14 @@ const FechamentoDetalheModal: React.FC<FechamentoDetalheModalProps> = ({ movimen
         const uploadedUrls: string[] = [];
         for (const file of selectedFiles) {
             try {
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0];
+                const randomId = Math.random().toString(36).substring(2, 7);
                 const fileExt = file.name.split('.').pop();
-                const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+                
+                // Ex: ABC1234/fotos/ABC1234_20231027_153045_a1b2c.jpg
+                const fileName = `${placa}/fotos/${placa}_${timestamp}_${randomId}.${fileExt}`;
+                
                 const { error: uploadError } = await supabase.storage.from('avarias').upload(fileName, file);
                 if (uploadError) throw uploadError;
                 const { data: { publicUrl } } = supabase.storage.from('avarias').getPublicUrl(fileName);

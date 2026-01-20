@@ -101,11 +101,17 @@ const SolicitacaoColeta: React.FC<SolicitacaoColetaProps> = ({ setCurrentPage })
 
   const uploadFiles = async (placa: string, files: File[], bucket: 'avarias' | 'documentos'): Promise<string[]> => {
     const uploadedUrls: string[] = [];
+    const subfolder = bucket === 'avarias' ? 'fotos' : 'docs';
     
     for (const file of files) {
         try {
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0]; // YYYYMMDDHHMMSS
+            const randomId = Math.random().toString(36).substring(2, 7);
             const fileExt = file.name.split('.').pop();
-            const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+            
+            // Ex: ABC1234/fotos/ABC1234_20231027_153045_a1b2c.jpg
+            const fileName = `${placa}/${subfolder}/${placa}_${timestamp}_${randomId}.${fileExt}`;
             
             const { error: uploadError } = await supabase.storage
                 .from(bucket)

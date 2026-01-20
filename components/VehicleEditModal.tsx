@@ -102,13 +102,25 @@ const VehicleEditModal: React.FC<VehicleEditModalProps> = ({ vehicle, onClose, o
 
     const uploadFiles = async (placa: string, files: File[], bucket: 'avarias' | 'documentos'): Promise<string[]> => {
         const uploadedUrls: string[] = [];
+        const subfolder = bucket === 'avarias' ? 'fotos' : 'docs';
+
         for (const file of files) {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${placa}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-            const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file);
-            if (uploadError) throw uploadError;
-            const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(fileName);
-            uploadedUrls.push(publicUrl);
+            try {
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[-:T]/g, '').split('.')[0];
+                const randomId = Math.random().toString(36).substring(2, 7);
+                const fileExt = file.name.split('.').pop();
+                
+                const fileName = `${placa}/${subfolder}/${placa}_${timestamp}_${randomId}.${fileExt}`;
+                
+                const { error: uploadError } = await supabase.storage.from(bucket).upload(fileName, file);
+                if (uploadError) throw uploadError;
+                
+                const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(fileName);
+                uploadedUrls.push(publicUrl);
+            } catch (err: any) {
+                throw err;
+            }
         }
         return uploadedUrls;
     };

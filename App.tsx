@@ -38,7 +38,11 @@ const App: React.FC = () => {
     }
   }, [profile]);
 
-  // Se estiver carregando pela primeira vez e não houver sessão/perfil, mostramos um loader discreto
+  // REGRA DE OURO: Se não tem sessão, SEMPRE vai para o Auth, independente de estar carregando ou não.
+  // Isso evita que o usuário veja "Sincronizando Dados" logo após clicar em Sair.
+  if (!session) return <AuthComponent />;
+
+  // Se estiver carregando os dados do perfil pela primeira vez
   if (loading && !profile) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-900 p-6">
@@ -52,15 +56,12 @@ const App: React.FC = () => {
     );
   }
 
-  // Se não houver sessão, vai para o login
-  if (!session) return <AuthComponent />;
-
-  // Se houver sessão mas o perfil estiver vindo, aguardamos sem tela de erro
+  // Se houver sessão mas o perfil ainda não carregou (raro com cache local, mas possível)
   if (!profile) {
     return (
        <div className="flex flex-col items-center justify-center h-screen bg-gray-900">
           <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Carregando Perfil...</p>
+          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Acessando Perfil...</p>
        </div>
     );
   }
@@ -69,7 +70,6 @@ const App: React.FC = () => {
     const isAdmin = profile.cargo === 'admin';
     const permissions = Array.isArray(profile.permissions) ? profile.permissions : [];
     
-    // Fallback de segurança para permissões
     if (!isAdmin && !permissions.includes(currentPage)) {
         if (profile.cargo === 'motorista') {
              if (currentPage !== 'collections') setCurrentPage('collections');

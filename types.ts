@@ -43,6 +43,7 @@ export interface Veiculo {
   lng?: number;
   codigo_infracao_ctb?: string;
   fotos_avaria_url?: string[];
+  documentos_url?: string[];
   proprietario_nome?: string;
   proprietario_telefone?: string;
   motorista_id?: string;

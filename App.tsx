@@ -17,9 +17,8 @@ import Settings from './components/Settings';
 import { Page } from './types';
 
 const App: React.FC = () => {
-  const { session, profile, loading, error, signOut, retry } = useAuth();
+  const { session, profile, loading, signOut } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [showTimeoutUI, setShowTimeoutUI] = useState(false);
 
   useLocationTracking(profile);
 
@@ -39,68 +38,44 @@ const App: React.FC = () => {
     }
   }, [profile]);
 
-  // Timer de segurança para evitar hang infinito
-  useEffect(() => {
-    let timer: number;
-    if (loading || (session && !profile)) {
-      timer = window.setTimeout(() => setShowTimeoutUI(true), 7000);
-    } else {
-      setShowTimeoutUI(false);
-    }
-    return () => clearTimeout(timer);
-  }, [loading, session, profile]);
-
-  // TELA DE CARREGAMENTO COM RECUPERAÇÃO DE ERRO
-  if (loading || (session && !profile)) {
+  // Se estiver carregando pela primeira vez e não houver sessão/perfil, mostramos um loader discreto
+  if (loading && !profile) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-900 p-6">
         <div className="relative mb-8">
-            <div className="w-20 h-20 border-4 border-blue-500/20 rounded-full"></div>
-            <div className="absolute inset-0 w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-            </div>
+            <div className="w-16 h-16 border-4 border-blue-500/10 rounded-full"></div>
+            <div className="absolute inset-0 w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
-        
-        <h2 className="text-xl font-black text-white italic tracking-tighter mb-2">Pátio<span className="text-blue-500">Log</span></h2>
-        <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] animate-pulse mb-8">Iniciando Sistema...</p>
-
-        {showTimeoutUI && (
-          <div className="max-w-xs w-full space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-center">
-                <p className="text-xs font-bold text-red-400 mb-1">A conexão está demorando mais que o esperado.</p>
-                <p className="text-[9px] text-gray-500 uppercase font-black tracking-widest leading-tight">Isso pode ser causado por sinal de internet fraco ou falta de permissão no banco de dados.</p>
-             </div>
-             
-             <div className="flex flex-col gap-2">
-                <button 
-                  onClick={() => retry()}
-                  className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/40 transition-all active:scale-95"
-                >
-                  Tentar Reconectar
-                </button>
-                <button 
-                  onClick={() => signOut()}
-                  className="w-full py-4 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-2xl font-black uppercase text-[10px] tracking-widest border border-gray-700 transition-all active:scale-95"
-                >
-                  Sair e Entrar Novamente
-                </button>
-             </div>
-          </div>
-        )}
+        <h2 className="text-xl font-black text-white italic tracking-tighter mb-1">Pátio<span className="text-blue-500">Log</span></h2>
+        <p className="text-[9px] font-black text-gray-600 uppercase tracking-[0.4em] animate-pulse">Sincronizando Dados</p>
       </div>
     );
   }
 
+  // Se não houver sessão, vai para o login
   if (!session) return <AuthComponent />;
 
+  // Se houver sessão mas o perfil estiver vindo, aguardamos sem tela de erro
+  if (!profile) {
+    return (
+       <div className="flex flex-col items-center justify-center h-screen bg-gray-900">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Carregando Perfil...</p>
+       </div>
+    );
+  }
+
   const renderCurrentPage = () => {
-    const isAdmin = profile?.cargo === 'admin';
-    const permissions = Array.isArray(profile?.permissions) ? profile.permissions : [];
+    const isAdmin = profile.cargo === 'admin';
+    const permissions = Array.isArray(profile.permissions) ? profile.permissions : [];
     
-    if (profile && !isAdmin && !permissions.includes(currentPage)) {
-        const fallback = profile.cargo === 'motorista' ? 'collections' : 'dashboard';
-        setCurrentPage(fallback as Page);
+    // Fallback de segurança para permissões
+    if (!isAdmin && !permissions.includes(currentPage)) {
+        if (profile.cargo === 'motorista') {
+             if (currentPage !== 'collections') setCurrentPage('collections');
+        } else {
+             if (currentPage !== 'dashboard') setCurrentPage('dashboard');
+        }
     }
 
     switch (currentPage) {
@@ -119,7 +94,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout profile={profile!} signOut={signOut} currentPage={currentPage} setCurrentPage={setCurrentPage}>
+    <Layout profile={profile} signOut={signOut} currentPage={currentPage} setCurrentPage={setCurrentPage}>
       {renderCurrentPage()}
     </Layout>
   );

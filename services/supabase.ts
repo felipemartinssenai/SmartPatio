@@ -12,7 +12,9 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
     storageKey: 'patiolog-auth-v2-stable',
     storage: window.localStorage,
-    flowType: 'pkce'
+    flowType: 'pkce',
+    // Garante que o usuário não precise relogar mesmo após fechar o navegador
+    debug: false
   },
   db: {
     schema: 'public',

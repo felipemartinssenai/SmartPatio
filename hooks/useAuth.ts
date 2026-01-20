@@ -12,8 +12,10 @@ export function useAuth() {
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
-      setLoading(true);
-      setError(null);
+      // Não resetamos o loading para true se já tivermos um perfil, 
+      // para evitar que a tela de loading apareça em atualizações de fundo
+      if (!profile) setLoading(true);
+      
       const { data, error: profileError } = await supabase
         .from('profiles')
         .select('*')
@@ -21,21 +23,19 @@ export function useAuth() {
         .single();
       
       if (profileError) {
-        // Se o erro for "não encontrado", pode ser que a trigger ainda não criou o perfil
-        console.error('Erro ao buscar perfil:', profileError.message);
-        setError(profileError.message);
-        setProfile(null);
+        console.warn('Falha temporária ao sincronizar perfil:', profileError.message);
+        // Se já temos um perfil no estado, não o removemos por erro de conexão
+        if (!profile) setError(profileError.message);
       } else if (data) {
         setProfile(data as Profile);
+        setError(null);
       }
     } catch (err: any) {
       console.error('Erro crítico no fetchProfile:', err.message);
-      setError(err.message);
-      setProfile(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [profile]);
 
   const handleLogout = useCallback(async () => {
     setLoading(true);
@@ -55,7 +55,6 @@ export function useAuth() {
 
   useEffect(() => {
     const initializeAuth = async () => {
-      setLoading(true);
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         
@@ -78,7 +77,7 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (event === 'SIGNED_IN') {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
           if (currentSession?.user) {
             await fetchProfile(currentSession.user.id);
@@ -87,8 +86,6 @@ export function useAuth() {
           setSession(null);
           setProfile(null);
           setLoading(false);
-        } else if (event === 'TOKEN_REFRESHED') {
-          setSession(currentSession);
         }
       }
     );

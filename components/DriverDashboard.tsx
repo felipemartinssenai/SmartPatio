@@ -4,7 +4,6 @@ import { supabase } from '../services/supabase';
 import { Veiculo } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useNotifications } from '../hooks/useNotifications';
-import { useLocationTracking } from '../hooks/useLocationTracking';
 import VehicleDetailModal from './VehicleDetailModal';
 
 const REFRESH_INTERVAL = 9000;
@@ -88,7 +87,6 @@ const VehicleCard: React.FC<{
 const DriverDashboard: React.FC = () => {
   const { user, profile } = useAuth();
   const { sendNotification, playChime, permission, requestPermission } = useNotifications();
-  const { gpsStatus } = useLocationTracking(profile);
   const [vehicles, setVehicles] = useState<Veiculo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -192,34 +190,24 @@ const DriverDashboard: React.FC = () => {
         onClose={() => setSelectedVehicle(null)} 
       />
 
-      {/* Barra de Status Multi-Monitoramento */}
-      <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex items-center justify-between z-20 overflow-x-auto gap-4 no-scrollbar">
-          <div className="flex items-center gap-4 flex-shrink-0">
-             {/* Status Supabase */}
+      <div className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between z-20 shadow-lg">
+          <div className="flex items-center gap-4">
              <div className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500 animate-pulse'}`}></div>
-                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Rede</span>
-             </div>
-
-             {/* Status GPS */}
-             <div className="flex items-center gap-1.5 border-l border-gray-700 pl-4">
-                <div className={`w-2 h-2 rounded-full ${gpsStatus === 'active' ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]' : gpsStatus === 'denied' ? 'bg-red-600' : 'bg-yellow-500 animate-bounce'}`}></div>
-                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                  {gpsStatus === 'active' ? 'GPS Ativo' : gpsStatus === 'denied' ? 'GPS Bloqueado' : 'Buscando GPS'}
-                </span>
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-500' : 'bg-red-500'}`}></div>
+                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Servidor {isConnected ? 'Online' : 'Offline'}</span>
              </div>
           </div>
           
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-3">
               {permission !== 'granted' && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); requestPermission(); }}
-                    className="text-[8px] font-black bg-blue-600 text-white px-3 py-1.5 rounded-full uppercase tracking-widest animate-pulse"
+                    className="text-[8px] font-black bg-blue-600 text-white px-3 py-1.5 rounded-full uppercase tracking-widest"
                   >
                     Ativar Alertas 🔔
                   </button>
               )}
-              <button onClick={() => syncData(false)} className="p-1.5 bg-gray-900 rounded-lg border border-gray-700 active:scale-90 transition-all">
+              <button onClick={() => syncData(false)} className="p-2 bg-gray-900 rounded-xl border border-gray-700">
                 <svg className={`w-4 h-4 text-blue-500 ${loading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
               </button>
           </div>
@@ -236,17 +224,11 @@ const DriverDashboard: React.FC = () => {
       </header>
 
       <main className="flex-1 p-4 overflow-y-auto space-y-4 pb-20">
-        {gpsStatus === 'denied' && (
-           <div className="bg-red-600 text-white p-4 rounded-[20px] font-black text-[10px] uppercase tracking-widest text-center shadow-lg animate-bounce">
-              ⚠️ ATENÇÃO: Habilite a localização nas configurações do seu navegador para ser visto no mapa!
-           </div>
-        )}
-        
         {vehicles.length === 0 && !loading ? (
             <div className="text-center py-32 opacity-20 flex flex-col items-center">
                 <span className="text-6xl mb-4">🚛</span>
                 <p className="text-white font-black uppercase text-sm">Pátio Vazio</p>
-                <p className="text-white text-[10px] mt-1 tracking-widest uppercase text-center">Aguardando rádio de novas coletas...</p>
+                <p className="text-white text-[10px] mt-1 tracking-widest uppercase text-center">Aguardando novas coletas...</p>
             </div>
         ) : (
             <div className="grid grid-cols-1 gap-4">

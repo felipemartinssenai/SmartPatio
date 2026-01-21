@@ -10,6 +10,7 @@ export function useLocationTracking(profile: Profile | null) {
 
   useEffect(() => {
     if (!profile || profile.cargo !== 'motorista' || !('geolocation' in navigator)) {
+      setGpsStatus('denied');
       return;
     }
 
@@ -24,10 +25,7 @@ export function useLocationTracking(profile: Profile | null) {
           })
           .eq('id', profile.id);
 
-        if (error) {
-            console.error('[GPS] Erro no Supabase:', error.message);
-            setGpsStatus('error');
-        } else {
+        if (!error) {
           lastUpdate.current = Date.now();
           setGpsStatus('active');
         }
@@ -38,9 +36,9 @@ export function useLocationTracking(profile: Profile | null) {
 
     const updateLocation = (position: GeolocationPosition) => {
       const now = Date.now();
-      // Envia atualizações a cada 10 segundos para economizar bateria
-      // Exceto na primeira vez (lastUpdate será 0)
+      // Envia atualizações com throttle de 10 segundos (comportamento original)
       if (lastUpdate.current !== 0 && now - lastUpdate.current < 10000) return;
+      
       sendPositionToSupabase(position.coords.latitude, position.coords.longitude);
     };
 
@@ -49,21 +47,13 @@ export function useLocationTracking(profile: Profile | null) {
       else setGpsStatus('error');
     };
 
-    // Força captura imediata ao iniciar
-    navigator.geolocation.getCurrentPosition(
-      (pos) => sendPositionToSupabase(pos.coords.latitude, pos.coords.longitude),
-      handleError,
-      { enableHighAccuracy: true, timeout: 5000 }
-    );
-
-    // Monitoramento contínuo
     watchId.current = navigator.geolocation.watchPosition(
       updateLocation,
       handleError,
       {
         enableHighAccuracy: true,
         timeout: 15000,
-        maximumAge: 0,
+        maximumAge: 10000,
       }
     );
 
@@ -72,7 +62,7 @@ export function useLocationTracking(profile: Profile | null) {
         navigator.geolocation.clearWatch(watchId.current);
       }
     };
-  }, [profile]);
+  }, [profile?.id]);
 
   return { gpsStatus };
 }
